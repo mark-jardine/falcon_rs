@@ -1,4 +1,4 @@
-const NUM_PRIMES: usize= 522;
+const NUM_PRIMES: usize = 522;
 pub struct SmallPrime {
     p: u32,
     g: u32,
