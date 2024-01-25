@@ -14,9 +14,6 @@
  */
 use num_bigint::{BigInt};
 
-// Q is the modulus used in Falcon (12 * 1024 + 1)
-pub const Q: u16 = 12289;
-
 // This function raises base to the power of exponent, modulo modulus.
 pub fn mod_pow(base: &BigInt, exponent: &BigInt, modulus: &BigInt) -> BigInt{
     BigInt::new(base.sign(), base.iter_u32_digits().collect()).modpow(exponent, modulus)
