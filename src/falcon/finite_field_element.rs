@@ -61,7 +61,7 @@ impl FiniteFieldElem{
 
         // If the new value is negative, return Q, otherwise return the modulus-reduced value
         let gte_zero: u32 = (new_val >= 0) as u32;
-        let mod_val: u32 = (new_val + (Q * (1 - gte_zero)) ) as u32;
+        let mod_val: u32 = new_val + (Q * (1 - gte_zero));
 
         FiniteFieldElem{value: mod_val}
     }
