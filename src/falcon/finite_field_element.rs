@@ -36,22 +36,22 @@ impl FiniteFieldElem{
         let sign: i32 = gte_zero_int - ((!gte_zero) as i32);
 
         // Apply modulus, if the value is negative, val_mod = 0
-        let val_mod: i32 = sign * (sign * (val % Q));
+        let val_mod: i32 = sign * (sign * (val % Q as i32));
 
         // If the input value is negative, return Q, otherwise return the modulus-reduced value
-        let f_elem: u32 = (val_mod + (Q * (1 - gte_zero_int)) as u32) as u32;
+        let f_elem: u32 = (val_mod as u32 + (Q as u32 * (1 - gte_zero_int as u32)));
 
         FiniteFieldElem{value: f_elem}
     }
 
     pub fn mult(&self, other: FiniteFieldElem) -> FiniteFieldElem{
-        let new_val: u32 = (self.value * other.value) % Q;
+        let new_val: u32 = (self.value * other.value) % Q as u32;
 
         FiniteFieldElem{value: new_val}
     }
 
     pub fn add(&self, other: FiniteFieldElem) -> FiniteFieldElem{
-        let new_val: u32 = (self.value + other.value) % Q;
+        let new_val: u32 = (self.value + other.value) % Q as u32;
 
         FiniteFieldElem{value: new_val}
     }
@@ -61,7 +61,7 @@ impl FiniteFieldElem{
 
         // If the new value is negative, return Q, otherwise return the modulus-reduced value
         let gte_zero: u32 = (new_val >= 0) as u32;
-        let mod_val: u32 = new_val + (Q * (1 - gte_zero));
+        let mod_val: u32 = new_val + (Q as u32 * (1 - gte_zero) );
 
         FiniteFieldElem{value: mod_val}
     }
