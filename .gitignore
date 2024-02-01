@@ -1,3 +1,4 @@
 /target
 .DS_STORE
 src/.DS_STORE
+.idea/*

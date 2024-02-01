@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 num-bigint = "0.4.4"
 num-complex = "0.4.4"
+lazy_static = { version = "1.4.0", features = [] }
 
 [lib]
 path = "src/lib.rs"

@@ -12,7 +12,7 @@
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
  */
-use num_bigint::{BigInt};
+use num_bigint::BigInt;
 
 // This function raises base to the power of exponent, modulo modulus.
 pub fn mod_pow(base: &BigInt, exponent: &BigInt, modulus: &BigInt) -> BigInt{
