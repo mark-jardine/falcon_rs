@@ -15,11 +15,16 @@
 use num_bigint::BigInt;
 
 #[derive(Debug)]
-struct Polynomial {
-    coefficients: Vec<BigInt>,
+pub struct Polynomial {
+    pub coefficients: Vec<BigInt>,
 }
 
 impl Polynomial {
+    pub fn new(x: BigInt, y: BigInt) -> Self {
+        Polynomial {
+            coefficients: vec![x, y],
+        }
+    }
     /*
     Splits a polynomial into two polynomials, one containing the even indices, and the other containing the odd.
 

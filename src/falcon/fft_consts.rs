@@ -1,8 +1,26 @@
+/*
+    Implementation of the Falcon Digital Signature Scheme.
+    Copyright (C) 2024 Mark Jardine
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    Portions of this software are adapted from work by Thomas Prest, 2018,
+    licensed under the MIT License. See the LICENSE_MIT file in this distribution
+    for the full license text.
+*/
 use lazy_static::lazy_static;
 use num_complex::{Complex, Complex64};
 use std::collections::HashMap;
 /*
-A HashMap of all the roots
+    A HashMap of all the roots
 */
 lazy_static! {
     pub static ref ROOTS_DICT: HashMap<i32, Vec<Complex64>> = {
@@ -23,21 +41,18 @@ lazy_static! {
     };
 }
 /*
-Constants (Zq-roots of cyclotomic polynomials) for the FFT.
-These were computed using scripts/generate_constants.sage.
-
-These constants were sourced from https://github.com/tprest/falcon.py/blob/master/ntt_constants.py
+    Constants (Zq-roots of cyclotomic polynomials) for the FFT.
 */
 
 /*
-The roots of phi_4 = x^2 + 1
-The second root is the conjugate of the first one.
+    The roots of phi_4 = x^2 + 1
+    The second root is the conjugate of the first one.
 */
 const PHI4_ROOTS: [Complex64; 1] = [Complex::new(1.00000000000000, -1.00000000000000)];
 /*
-The roots of phi_8 = x^4 + 1
-The second half of the roots are is the conjugates of the first half.
-The root at index (2 * i + 1) is the negation of the root at index (2 * i).
+    The roots of phi_8 = x^4 + 1
+    The second half of the roots are is the conjugates of the first half.
+    The root at index (2 * i + 1) is the negation of the root at index (2 * i).
 */
 const PHI8_ROOTS: [Complex64; 4] = [
     Complex::new(0.707106781186548, 0.707106781186547),
@@ -47,9 +62,9 @@ const PHI8_ROOTS: [Complex64; 4] = [
 ];
 
 /*
-The roots of phi_16 = x^8 + 1
-The second half of the roots are is the conjugates of the first half.
-The root at index (2 * i + 1) is the negation of the root at index (2 * i).
+    The roots of phi_16 = x^8 + 1
+    The second half of the roots are is the conjugates of the first half.
+    The root at index (2 * i + 1) is the negation of the root at index (2 * i).
 */
 const PHI16_ROOTS: [Complex64; 8] = [
     Complex::new(0.923879532511287, 0.382683432365090),
@@ -63,9 +78,9 @@ const PHI16_ROOTS: [Complex64; 8] = [
 ];
 
 /*
-The roots of phi_32 = x^16 + 1
-The second half of the roots are is the conjugates of the first half.
-The root at index (2 * i + 1) is the negation of the root at index (2 * i).
+    The roots of phi_32 = x^16 + 1
+    The second half of the roots are is the conjugates of the first half.
+    The root at index (2 * i + 1) is the negation of the root at index (2 * i).
 */
 const PHI32_ROOTS: [Complex64; 16] = [
     Complex::new(0.980785280403230, 0.195090322016128),
@@ -87,9 +102,9 @@ const PHI32_ROOTS: [Complex64; 16] = [
 ];
 
 /*
-The roots of phi_64 = x^32 + 1
-The second half of the roots are is the conjugates of the first half.
-The root at index (2 * i + 1) is the negation of the root at index (2 * i).
+    The roots of phi_64 = x^32 + 1
+    The second half of the roots are is the conjugates of the first half.
+    The root at index (2 * i + 1) is the negation of the root at index (2 * i).
 */
 const PHI64_ROOTS: [Complex64; 32] = [
     Complex::new(0.995184726672197, 0.0980171403295606),
@@ -127,9 +142,9 @@ const PHI64_ROOTS: [Complex64; 32] = [
 ];
 
 /*
-The roots of phi_128 = x^64 + 1
-The second half of the roots are is the conjugates of the first half.
-The root at index (2 * i + 1) is the negation of the root at index (2 * i).
+    The roots of phi_128 = x^64 + 1
+    The second half of the roots are is the conjugates of the first half.
+    The root at index (2 * i + 1) is the negation of the root at index (2 * i).
 */
 const PHI128_ROOTS: [Complex64; 64] = [
     Complex::new(0.998795456205172, 0.0490676743274180),
@@ -199,9 +214,9 @@ const PHI128_ROOTS: [Complex64; 64] = [
 ];
 
 /*
-The roots of phi_256 = x^128 + 1
-The second half of the roots are is the conjugates of the first half.
-The root at index (2 * i + 1) is the negation of the root at index (2 * i).
+    The roots of phi_256 = x^128 + 1
+    The second half of the roots are is the conjugates of the first half.
+    The root at index (2 * i + 1) is the negation of the root at index (2 * i).
 */
 const PHI256_ROOTS: [Complex64; 128] = [
     Complex::new(0.999698818696204, 0.0245412285229123),
@@ -335,9 +350,9 @@ const PHI256_ROOTS: [Complex64; 128] = [
 ];
 
 /*
-The roots of phi_512 = x^256 + 1
-The second half of the roots are is the conjugates of the first half.
-The root at index (2 * i + 1) is the negation of the root at index (2 * i).
+    The roots of phi_512 = x^256 + 1
+    The second half of the roots are is the conjugates of the first half.
+    The root at index (2 * i + 1) is the negation of the root at index (2 * i).
 */
 const PHI512_ROOTS: [Complex64; 256] = [
     Complex::new(0.999924701839145, 0.0122715382857199),
@@ -599,8 +614,8 @@ const PHI512_ROOTS: [Complex64; 256] = [
 ];
 
 /*
-The second half of the roots are is the conjugates of the first half.
-The root at index (2 * i + 1) is the negation of the root at index (2 * i).
+    The second half of the roots are is the conjugates of the first half.
+    The root at index (2 * i + 1) is the negation of the root at index (2 * i).
 */
 const PHI1024_ROOTS: [Complex64; 512] = [
     Complex::new(0.999981175282601, 0.00613588464915448),
@@ -1118,9 +1133,9 @@ const PHI1024_ROOTS: [Complex64; 512] = [
 ];
 
 /*
-The roots of phi_2048 = x^1024 + 1
-The second half of the roots are is the conjugates of the first half.
-The root at index (2 * i + 1) is the negation of the root at index (2 * i).
+    The roots of phi_2048 = x^1024 + 1
+    The second half of the roots are is the conjugates of the first half.
+    The root at index (2 * i + 1) is the negation of the root at index (2 * i).
 */
 const PHI2048_ROOTS: [Complex64; 1024] = [
     Complex::new(0.999995293809576, 0.00306795676296598),
