@@ -23,7 +23,7 @@ use std::collections::HashMap;
     A HashMap of all the roots
 */
 lazy_static! {
-    pub static ref ROOTS_DICT: HashMap<i32, Vec<Complex64>> = {
+    pub static ref ROOTS_DICT: HashMap<usize, Vec<Complex64>> = {
         let mut roots = HashMap::new();
 
         roots.insert(2, Vec::from(&PHI4_ROOTS[..]));

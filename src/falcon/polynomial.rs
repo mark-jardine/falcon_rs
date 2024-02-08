@@ -12,17 +12,19 @@
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
 */
-use num_bigint::BigInt;
 
+/*
+    A polynomial in coefficient format.
+*/
 #[derive(Debug)]
 pub struct Polynomial {
-    pub coefficients: Vec<BigInt>,
+    pub coefficients: Vec<i32>,
 }
 
 impl Polynomial {
-    pub fn new(x: BigInt, y: BigInt) -> Self {
+    pub fn new(_coefficients: Vec<i32>) -> Self {
         Polynomial {
-            coefficients: vec![x, y],
+            coefficients: _coefficients,
         }
     }
     /*
@@ -33,8 +35,21 @@ impl Polynomial {
 
     todo: may require padding of zeros on p to ensure that the number of coefficients is even.
      */
-    fn split(p: &Polynomial) -> Vec<Polynomial> {
-        todo!()
+    pub fn split(p: &Polynomial) -> (Polynomial, Polynomial) {
+        let length: usize = p.coefficients.len();
+
+        let mut f0_coeffs: Vec<i32> = Vec::new();
+        let mut f1_coeffs: Vec<i32> = Vec::new();
+
+        for i in 0..(length / 2) {
+            f0_coeffs.push(p.coefficients[2 * i]);
+            f1_coeffs.push(p.coefficients[2 * i + 1]);
+        }
+
+        let f0: Polynomial = Polynomial::new(f0_coeffs);
+        let f1: Polynomial = Polynomial::new(f1_coeffs);
+
+        (f0, f1)
     }
 
     /*
@@ -43,7 +58,7 @@ impl Polynomial {
     Used after NTT computations to recombine the polynomial. Called in reverse order to that of
     split(). merge() is also called recursively in this manner.
      */
-    fn merge(v: Vec<Polynomial>) -> Polynomial {
+    pub fn merge(v: Vec<Polynomial>) -> Polynomial {
         todo!()
     }
 }
