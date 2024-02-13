@@ -16,13 +16,15 @@
 /*
     A polynomial in coefficient format.
 */
+
+use super::finite_field_element::FiniteFieldElem;
 #[derive(Debug)]
 pub struct Polynomial {
-    pub coefficients: Vec<i32>,
+    pub coefficients: Vec<FiniteFieldElem>,
 }
 
 impl Polynomial {
-    pub fn new(_coefficients: Vec<i32>) -> Self {
+    pub fn new(_coefficients: Vec<FiniteFieldElem>) -> Self {
         Polynomial {
             coefficients: _coefficients,
         }
@@ -38,8 +40,8 @@ impl Polynomial {
     pub fn split(p: &Polynomial) -> (Polynomial, Polynomial) {
         let length: usize = p.coefficients.len();
 
-        let mut f0_coeffs: Vec<i32> = Vec::new();
-        let mut f1_coeffs: Vec<i32> = Vec::new();
+        let mut f0_coeffs: Vec<FiniteFieldElem> = Vec::new();
+        let mut f1_coeffs: Vec<FiniteFieldElem> = Vec::new();
 
         for i in 0..(length / 2) {
             f0_coeffs.push(p.coefficients[2 * i]);

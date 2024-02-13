@@ -1,12 +1,24 @@
+/*
+    Implementation of the Falcon Digital Signature Scheme.
+    Copyright (C) 2024 Mark Jardine
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    Portions of this software are adapted from work by Thomas Prest, 2018,
+    licensed under the MIT License. See the LICENSE_MIT file in this distribution
+    for the full license text.
+*/
+
 use lazy_static::lazy_static;
 use std::collections::HashMap;
-
-/*
-Constants (Zq-roots of cyclotomic polynomials) for the NTT.
-These were computed using scripts/generate_constants.sage.
-
-These constants were sourced from https://github.com/tprest/falcon.py/blob/master/ntt_constants.py
-  */
 
 /*
 For each table of roots, the following holds:
@@ -18,7 +30,7 @@ For each table of roots, the following holds:
 A HashMap of all the roots
 */
 lazy_static! {
-    pub static ref ROOTS_DICT_ZQ: HashMap<i32, Vec<i32>> = {
+    pub static ref ROOTS_DICT_ZQ: HashMap<usize, Vec<i32>> = {
         let mut roots = HashMap::new();
         roots.insert(2, Vec::from(PHI4_ROOTS_ZQ));
         roots.insert(4, Vec::from(PHI8_ROOTS_ZQ));

@@ -31,10 +31,10 @@ use std::vec;
     Returns:
         - a Tuple, containing two polynomials in FFT representation
 
-    Reference: Algorithm 1 splitfft(FFT(f)) in Falcon's specification
+    Reference: Algorithm 1 splitfft(FFT(f)) in Falcon's specification.
 */
 fn split_fft(f: Vec<Complex64>) -> (Vec<Complex64>, Vec<Complex64>) {
-    let length = f.len();
+    let length: usize = f.len();
 
     // Precomputed roots of unity associated with FFT of size `length`
     let w = ROOTS_DICT.get(&length).unwrap();
