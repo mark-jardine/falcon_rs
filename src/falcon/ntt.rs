@@ -26,6 +26,13 @@ use super::polynomial::Polynomial;
 
 const I2: u16 = 6145;
 
+/*
+    Split a polynomial f_ntt in coefficient representation into
+    two polynomials in coefficient representation.
+
+    Params:
+        f_ntt: a polynomial in coefficient representation
+*/
 fn split_ntt(f_ntt: Polynomial) -> (Polynomial, Polynomial) {
     let length: usize = f_ntt.coefficients.len();
     let w = ROOTS_DICT_ZQ.get(&length).unwrap();
@@ -47,5 +54,5 @@ fn split_ntt(f_ntt: Polynomial) -> (Polynomial, Polynomial) {
         f1_ntt.coefficients[i].mult(&FiniteFieldElem::new(INV_MOD_Q[w[2 * i] as usize]));
     }
 
-    (Polynomial::new(vec![]), Polynomial::new(vec![]))
+    (f0_ntt, f1_ntt)
 }
