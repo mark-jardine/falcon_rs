@@ -27,6 +27,7 @@ pub struct FiniteFieldElem {
     value: u32,
 }
 
+//todo: maybe change val to be u32, likewise for Q
 impl FiniteFieldElem {
     pub fn new(val: i32) -> Self {
         let val_mod = ((val % Q as i32) + Q as i32) % Q as i32;
@@ -36,28 +37,27 @@ impl FiniteFieldElem {
         }
     }
 
-    pub fn mult(&self, other: FiniteFieldElem) -> FiniteFieldElem {
+    pub fn mult(&mut self, other: &FiniteFieldElem) {
         let new_val: u32 = (self.value * other.value) % Q as u32;
 
-        FiniteFieldElem { value: new_val }
+        self.value = new_val;
     }
 
-    pub fn add(&self, other: FiniteFieldElem) -> FiniteFieldElem {
+    pub fn add(&mut self, other: &FiniteFieldElem) {
         let new_val: u32 = (self.value + other.value) % Q as u32;
 
-        FiniteFieldElem { value: new_val }
+        self.value = new_val;
     }
 
-    pub fn sub(&self, other: FiniteFieldElem) -> FiniteFieldElem {
+    pub fn sub(&mut self, other: &FiniteFieldElem) {
         let diff = (self.value as i32 - other.value as i32 + Q as i32) % Q as i32;
 
-        FiniteFieldElem { value: diff as u32 }
+        self.value = diff as u32;
     }
 
-    pub fn neg(&self) -> FiniteFieldElem {
+    pub fn neg(&mut self) {
         let neg_val = (Q as i32 - self.value as i32) % Q as i32;
-        FiniteFieldElem {
-            value: neg_val as u32,
-        }
+
+        self.value = neg_val as u32;
     }
 }
