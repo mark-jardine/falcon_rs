@@ -17,8 +17,6 @@
     A polynomial in coefficient format.
 */
 
-use std::f32::consts::E;
-
 use super::finite_field_element::FiniteFieldElem;
 #[derive(Debug)]
 pub struct Polynomial {

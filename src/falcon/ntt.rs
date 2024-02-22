@@ -34,16 +34,16 @@ const I2: u16 = 6145;
 const SQRT_1: i32 = 1479;
 
 /*
-    Split a polynomial f_ntt in coefficient representation into
-    two polynomials in coefficient representation.
+    Split a polynomial f_ntt in ntt representation into
+    two polynomials in ntt representation.
 
     Params:
-        f_ntt: a polynomial in coefficient representation
+        f_ntt: a polynomial in ntt representation
 
     Returns:
-        A tuple of polynomials in coefficient representation
+        A tuple of polynomials in ntt representation
 */
-fn split_ntt(f_ntt: Polynomial) -> (Polynomial, Polynomial) {
+fn split_ntt(f_ntt: &Polynomial) -> (Polynomial, Polynomial) {
     let length: usize = f_ntt.coefficients.len();
     let w = ROOTS_DICT_ZQ.get(&length).unwrap();
     let i2_ffe: FiniteFieldElem = FiniteFieldElem::new(I2 as i32);
@@ -68,14 +68,14 @@ fn split_ntt(f_ntt: Polynomial) -> (Polynomial, Polynomial) {
 }
 
 /*
-    Merge two polynomials in coefficient representation into
-    a single polynomial in coefficient representation.
+    Merge two polynomials in ntt representation into
+    a single polynomial in ntt representation.
 
     Params:
-        (f0_ntt, f1_ntt): a tuple of polynomials in coefficient representation
+        (f0_ntt, f1_ntt): a tuple of polynomials in ntt representation
 
     Returns:
-        A polynomial in coefficient representation
+        A polynomial in ntt representation
 */
 fn merge_ntt(f_tup: (Polynomial, Polynomial)) -> Polynomial {
     let (f0_ntt, f1_ntt) = f_tup;
@@ -98,6 +98,45 @@ fn merge_ntt(f_tup: (Polynomial, Polynomial)) -> Polynomial {
         ffe.sub(&w_at_2i);
         ffe.mult(&f1_ntt.coefficients[i]);
         f_ntt.coefficients[2 * i + 1] = ffe.clone();
+    }
+
+    f_ntt
+}
+
+/*
+    Compute the ntt of a polynomial
+
+    Params:
+        f - a polynomial in coefficient representation
+
+    Returns:
+        f_ntt - a polynomial in ntt representation
+*/
+fn ntt(f: &Polynomial) -> Polynomial {
+    let len: usize = f.coefficients.len();
+    let mut f_ntt: Polynomial = Polynomial::new(vec![]);
+
+    if len > 2 {
+        let (f0, f1) = Polynomial::split(&f);
+        let f0_ntt: Polynomial = ntt(&f0);
+        let f1_ntt: Polynomial = ntt(&f1);
+        f_ntt = merge_ntt((f0_ntt, f1_ntt));
+    } else if len == 2 {
+        let sqrt_1_ffe = FiniteFieldElem::new(SQRT_1);
+
+        f_ntt = Polynomial::new(vec![FiniteFieldElem::new(0); len]);
+
+        // f_ntt[0] = (f[0] + sqr1 * f[1]) % q
+        let mut ffe: FiniteFieldElem = f.coefficients[0];
+        ffe.add(&sqrt_1_ffe);
+        ffe.mult(&f.coefficients[1]);
+        f_ntt.coefficients[0] = ffe.clone();
+
+        // f_ntt[1] = (f[0] - sqr1 * f[1]) % q
+        let mut ffe: FiniteFieldElem = f.coefficients[0];
+        ffe.sub(&sqrt_1_ffe);
+        ffe.mult(&f.coefficients[1]);
+        f_ntt.coefficients[1] = ffe.clone();
     }
 
     f_ntt

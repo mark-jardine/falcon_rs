@@ -22,7 +22,7 @@ pub const Q: u16 = 12289;
    32-bit unsigned integer wrapper used to represent a finite field element.
    Handles the finite field arithmetic.
 */
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct FiniteFieldElem {
     pub value: u32,
 }
