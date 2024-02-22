@@ -86,6 +86,9 @@ fn fft(f: Polynomial) -> Vec<Complex64> {
     let length: usize = f.coefficients.len();
     let mut f_fft: Vec<Complex64> = vec![];
 
+    //Get u32 values as Vec<u32> from Polyomial's Vec<FiniteFieldElem> `coefficients`
+    let f_coeff: Vec<u32> = f.coefficients.iter().map(|x| x.value).collect();
+
     if length > 2 {
         let (f0, f1) = Polynomial::split(&f);
         let f0_fft = fft(f0);
@@ -93,8 +96,8 @@ fn fft(f: Polynomial) -> Vec<Complex64> {
         f_fft = merge_fft(vec![f0_fft, f1_fft]);
     } else if length == 2 {
         f_fft = vec![Complex64::new(0.0, 0.0); length];
-        f_fft[0] = Complex64::new(f.coefficients[0] as f64, 1.0 * f.coefficients[1] as f64);
-        f_fft[1] = Complex64::new(f.coefficients[0] as f64, -1.0 * f.coefficients[1] as f64);
+        f_fft[0] = Complex64::new(f_coeff[0] as f64, 1.0 * f_coeff[1] as f64);
+        f_fft[1] = Complex64::new(f_coeff[0] as f64, -1.0 * f_coeff[1] as f64);
     }
 
     f_fft

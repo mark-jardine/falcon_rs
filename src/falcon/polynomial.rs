@@ -17,6 +17,8 @@
     A polynomial in coefficient format.
 */
 
+use std::f32::consts::E;
+
 use super::finite_field_element::FiniteFieldElem;
 #[derive(Debug)]
 pub struct Polynomial {
@@ -44,8 +46,8 @@ impl Polynomial {
         let mut f1_coeffs: Vec<FiniteFieldElem> = Vec::new();
 
         for i in 0..(length / 2) {
-            f0_coeffs.push(p.coefficients[2 * i]);
-            f1_coeffs.push(p.coefficients[2 * i + 1]);
+            f0_coeffs.push(p.coefficients[2 * i].clone());
+            f1_coeffs.push(p.coefficients[2 * i + 1].clone());
         }
 
         let f0: Polynomial = Polynomial::new(f0_coeffs);

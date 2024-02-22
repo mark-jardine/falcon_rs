@@ -24,7 +24,7 @@ pub const Q: u16 = 12289;
 */
 #[derive(Debug, Clone)]
 pub struct FiniteFieldElem {
-    value: u32,
+    pub value: u32,
 }
 
 //todo: maybe change val to be u32, likewise for Q
