@@ -84,19 +84,18 @@ fn merge_ntt(f_tup: (Polynomial, Polynomial)) -> Polynomial {
     let mut f_ntt: Polynomial = Polynomial::new(vec![FiniteFieldElem::new(0); length]);
 
     for i in 0..length / 2 {
+        // Value of w[2*i]
+        let w_at_2i = FiniteFieldElem::new(w.get(2 * i as usize).unwrap().to_owned());
+
         // f_ntt[2 * i + 0] = (f0_ntt[i] + w[2 * i] * f1_ntt[i]) % q
         let mut ffe: FiniteFieldElem = FiniteFieldElem::new(f0_ntt.coefficients[i].value as i32);
-        ffe.add(&FiniteFieldElem::new(
-            w.get(2 * i as usize).unwrap().to_owned(),
-        ));
+        ffe.add(&w_at_2i);
         ffe.mult(&f1_ntt.coefficients[i]);
         f_ntt.coefficients[2 * i] = ffe.clone();
 
         // f_ntt[2 * i + 1] = (f0_ntt[i] - w[2 * i] * f1_ntt[i]) % q
         ffe = FiniteFieldElem::new(f0_ntt.coefficients[i].value as i32);
-        ffe.sub(&FiniteFieldElem::new(
-            w.get(2 * i as usize).unwrap().to_owned(),
-        ));
+        ffe.sub(&w_at_2i);
         ffe.mult(&f1_ntt.coefficients[i]);
         f_ntt.coefficients[2 * i + 1] = ffe.clone();
     }
