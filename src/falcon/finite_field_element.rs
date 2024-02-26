@@ -27,32 +27,34 @@ pub struct FiniteFieldElem {
     pub value: u32,
 }
 
+impl PartialEq for FiniteFieldElem {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+
 //todo: maybe change val to be u32, likewise for Q
 impl FiniteFieldElem {
-    pub fn new(val: i32) -> Self {
-        let val_mod = ((val % Q as i32) + Q as i32) % Q as i32;
-
+    pub fn new(val: u32) -> Self {
         FiniteFieldElem {
-            value: val_mod as u32,
+            value: val % Q as u32,
         }
     }
 
     pub fn mult(&mut self, other: &FiniteFieldElem) {
-        let new_val: u32 = (self.value * other.value) % Q as u32;
+        let new_val: i64 = (self.value as i64 * other.value as i64) % Q as i64;
 
-        self.value = new_val;
+        self.value = new_val as u32;
     }
 
     pub fn add(&mut self, other: &FiniteFieldElem) {
-        let new_val: u32 = (self.value + other.value) % Q as u32;
+        let new_val: i64 = (self.value as i64 + other.value as i64) % Q as i64;
 
-        self.value = new_val;
+        self.value = new_val as u32;
     }
 
     pub fn sub(&mut self, other: &FiniteFieldElem) {
-        let diff = (self.value as i32 - other.value as i32 + Q as i32) % Q as i32;
-
-        self.value = diff as u32;
+        self.value = (self.value as i64 - other.value as i64 + Q as i64) as u32 % Q as u32;
     }
 
     pub fn neg(&mut self) {

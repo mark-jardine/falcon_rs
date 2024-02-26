@@ -18,7 +18,7 @@
 */
 
 use super::finite_field_element::FiniteFieldElem;
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Polynomial {
     pub coefficients: Vec<FiniteFieldElem>,
 }
@@ -35,7 +35,8 @@ impl Polynomial {
     Used in the initial step of NTT computation to increase efficiency by allowing recursive calls to smaller
     degree polynomials.
 
-    todo: may require padding of zeros on p to ensure that the number of coefficients is even.
+    This will produce incorrect values in the case that the number of coefficients
+    in p is not even.
      */
     pub fn split(p: &Polynomial) -> (Polynomial, Polynomial) {
         let length: usize = p.coefficients.len();
@@ -60,7 +61,17 @@ impl Polynomial {
     Used after NTT computations to recombine the polynomial. Called in reverse order to that of
     split(). merge() is also called recursively in this manner.
      */
-    pub fn merge(v: Vec<Polynomial>) -> Polynomial {
-        todo!()
+    pub fn merge(f_vec: Vec<Polynomial>) -> Polynomial {
+        let f0 = f_vec.get(0).unwrap();
+        let f1 = f_vec.get(1).unwrap();
+        let n: usize = f0.coefficients.len() * 2;
+        let mut f: Polynomial = Polynomial::new(vec![FiniteFieldElem::new(0); n]);
+
+        for i in 0..n / 2 {
+            f.coefficients[2 * i] = f0.coefficients[i];
+            f.coefficients[2 * i + 1] = f1.coefficients[i];
+        }
+
+        f
     }
 }

@@ -5,8 +5,11 @@ edition = "2021"
 
 [dependencies]
 num-bigint = "0.4.4"
-num-complex = "0.4.4"
+num-complex = "0.4.5"
 lazy_static = { version = "1.4.0", features = [] }
+
+[dev-dependencies]
+rand ="0.8.5"
 
 [lib]
 path = "src/lib.rs"
