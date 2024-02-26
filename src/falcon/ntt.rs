@@ -141,3 +141,44 @@ fn ntt(f: &Polynomial) -> Polynomial {
 
     f_ntt
 }
+
+fn inv_ntt(f_ntt: &Polynomial) -> Polynomial {
+    let len: usize = f_ntt.coefficients.len();
+    let mut f: Polynomial = Polynomial::new(vec![]);
+
+    if len > 2 {
+        let (f0_ntt, f1_ntt) = split_ntt(&f_ntt);
+        let f0 = inv_ntt(&f0_ntt);
+        let f1 = inv_ntt(&f1_ntt);
+        f = Polynomial::merge(vec![f0, f1]);
+
+        return f;
+    } else if len == 2 {
+        f = Polynomial::new(vec![FiniteFieldElem::new(0); len]);
+        let i2_ffe: FiniteFieldElem = FiniteFieldElem::new(I2 as i32);
+        let inv_mod_q_at_1459 = FiniteFieldElem::new(*INV_MOD_Q.get(SQRT_1 as usize).unwrap());
+        let mut result_ffe = FiniteFieldElem::new(0);
+
+        // f[0] = (i2 * (f_ntt[0] + f_ntt[1])) % q
+        result_ffe.add(&f_ntt.coefficients[0]);
+        result_ffe.add(&f_ntt.coefficients[1]);
+        result_ffe.mult(&i2_ffe);
+        f.coefficients[0] = result_ffe.clone();
+        result_ffe.value = 0;
+
+        // f[1] = (i2 * inv_mod_q[1479] * (f_ntt[0] - f_ntt[1])) % q
+
+        // i2 * inv_mod_q[1479]
+        let mut calc_ffe = FiniteFieldElem::new(i2_ffe.value as i32);
+        calc_ffe.mult(&inv_mod_q_at_1459);
+
+        // (f_ntt[0] - f_ntt[1])
+        result_ffe.add(&f_ntt.coefficients[0]);
+        result_ffe.sub(&f_ntt.coefficients[1]);
+
+        result_ffe.mult(&calc_ffe);
+        f.coefficients[1] = result_ffe.clone();
+    }
+
+    f
+}
