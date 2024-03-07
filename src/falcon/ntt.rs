@@ -23,8 +23,11 @@ use super::polynomial::Polynomial;
 use std::vec;
 
 #[derive(Debug)]
-enum PolynomialError {
-    ZeroLength,
+enum NttError {
+    ZeroLengthPolynomial,
+    InvalidRootIndex,
+    FailedToSplitPolynomial,
+    InvNttFailed,
 }
 
 /*
@@ -47,9 +50,14 @@ const SQRT_1: u32 = 1479;
     Returns:
         A tuple of polynomials in ntt representation
 */
-fn split_ntt(f_ntt: &Polynomial) -> (Polynomial, Polynomial) {
+fn split_ntt(f_ntt: &Polynomial) -> Result<(Polynomial, Polynomial), NttError> {
     let length: usize = f_ntt.coefficients.len();
-    let w = ROOTS_DICT_ZQ.get(&length).unwrap();
+
+    let w: &Vec<i32> = match ROOTS_DICT_ZQ.get(&length) {
+        Some(val) => val,
+        None => return Err(NttError::InvalidRootIndex),
+    };
+
     let mut f0_ntt: Polynomial = Polynomial::new(vec![FiniteFieldElem::new(0); length / 2]);
     let mut f1_ntt: Polynomial = Polynomial::new(vec![FiniteFieldElem::new(0); length / 2]);
 
@@ -66,7 +74,7 @@ fn split_ntt(f_ntt: &Polynomial) -> (Polynomial, Polynomial) {
             .rem_euclid(Q as i64) as u32;
     }
 
-    (f0_ntt, f1_ntt)
+    Ok((f0_ntt, f1_ntt))
 }
 
 /*
@@ -79,15 +87,19 @@ fn split_ntt(f_ntt: &Polynomial) -> (Polynomial, Polynomial) {
     Returns:
         A polynomial in ntt representation
 */
-fn merge_ntt(f_tup: (Polynomial, Polynomial)) -> Result<Polynomial, PolynomialError> {
+fn merge_ntt(f_tup: (Polynomial, Polynomial)) -> Result<Polynomial, NttError> {
     let (f0_ntt, f1_ntt) = f_tup;
     let length: usize = f0_ntt.coefficients.len() * 2 as usize;
 
     if length == 0 {
-        return Err(PolynomialError::ZeroLength);
+        return Err(NttError::ZeroLengthPolynomial);
     }
 
-    let w = ROOTS_DICT_ZQ.get(&length).unwrap();
+    let w: &Vec<i32> = match ROOTS_DICT_ZQ.get(&length) {
+        Some(val) => val,
+        None => return Err(NttError::InvalidRootIndex),
+    };
+
     let mut f_ntt: Polynomial = Polynomial::new(vec![FiniteFieldElem::new(0); length]);
 
     for i in 0..length / 2 {
@@ -115,15 +127,11 @@ fn merge_ntt(f_tup: (Polynomial, Polynomial)) -> Result<Polynomial, PolynomialEr
     Returns:
         f_ntt - a polynomial in ntt representation
 */
-fn ntt(f: &Polynomial) -> Result<Polynomial, PolynomialError> {
+fn ntt(f: &Polynomial) -> Result<Polynomial, NttError> {
     let len: usize = f.coefficients.len();
     let mut f_ntt: Polynomial = Polynomial::new(vec![]);
 
     if len > 2 {
-        println!(
-            "Before base case NTT: f.coefficients[0]: {}, f.coefficients[1]: {}",
-            f.coefficients[0].value, f.coefficients[1].value
-        );
         let (f0, f1) = Polynomial::split(&f);
         let f0_ntt: Polynomial = ntt(&f0)?;
         let f1_ntt: Polynomial = ntt(&f1)?;
@@ -134,13 +142,9 @@ fn ntt(f: &Polynomial) -> Result<Polynomial, PolynomialError> {
             }
             Err(_) => {
                 eprint!("Polynomial error in ntt().\n");
-                return Err(PolynomialError::ZeroLength);
+                return Err(NttError::ZeroLengthPolynomial);
             }
         }
-        println!(
-            "After base case NTT: f_ntt.coefficients[0]: {}, f_ntt.coefficients[1]: {}",
-            f_ntt.coefficients[0].value, f_ntt.coefficients[1].value
-        );
     } else if len == 2 {
         f_ntt = Polynomial::new(vec![FiniteFieldElem::new(0); len]);
 
@@ -156,23 +160,31 @@ fn ntt(f: &Polynomial) -> Result<Polynomial, PolynomialError> {
     Ok(f_ntt)
 }
 
-fn inv_ntt(f_ntt: &Polynomial) -> Polynomial {
+fn inv_ntt(f_ntt: &Polynomial) -> Result<Polynomial, NttError> {
     let len: usize = f_ntt.coefficients.len();
     let mut f: Polynomial = Polynomial::new(vec![]);
 
     if len > 2 {
-        println!(
-            "Before base case iNTT: f_ntt.coefficients[0]: {}, f_ntt.coefficients[1]: {}",
-            f_ntt.coefficients[0].value, f_ntt.coefficients[1].value
-        );
-        let (f0_ntt, f1_ntt) = split_ntt(&f_ntt);
-        let f0 = inv_ntt(&f0_ntt);
-        let f1 = inv_ntt(&f1_ntt);
+        let (f0_ntt, f1_ntt) = match split_ntt(&f_ntt) {
+            Ok((f0_ntt, f1_ntt)) => (f0_ntt, f1_ntt),
+            Err(e) => {
+                eprintln!(
+                    "There was an error when attempting to split a polynomial in INV_NTT: {e:?}"
+                );
+                return Err(NttError::FailedToSplitPolynomial);
+            }
+        };
+
+        let f0 = match inv_ntt(&f0_ntt) {
+            Ok(f0) => f0,
+            Err(_) => return Err(NttError::InvNttFailed),
+        };
+        let f1 = match inv_ntt(&f1_ntt) {
+            Ok(f1) => f1,
+            Err(_) => return Err(NttError::InvNttFailed),
+        };
+
         f = Polynomial::merge(vec![f0, f1]);
-        println!(
-            "After base case iNTT: f.coefficients[0]: {}, f.coefficients[1]: {}",
-            f.coefficients[0].value, f.coefficients[1].value
-        );
     } else if len == 2 {
         f = Polynomial::new(vec![FiniteFieldElem::new(0); len]);
         let inv_mod_q_at_1459 =
@@ -189,7 +201,7 @@ fn inv_ntt(f_ntt: &Polynomial) -> Polynomial {
         .rem_euclid(Q as i64)) as u32;
     }
 
-    f
+    Ok(f)
 }
 
 #[cfg(test)]
@@ -210,7 +222,7 @@ mod tests {
         // println!("f after ntt computation: {f_ntt:?}");
 
         // Compute the inverse NTT of f_ntt
-        let f_recovered = inv_ntt(&f_ntt);
+        let f_recovered = inv_ntt(&f_ntt).expect("inv_ntt() failed in test_ntt_and_inv_ntt");
         // println!("f after inv_ntt computation: {f_recovered:?}");
 
         // Check if f_recovered is equal to f
@@ -275,7 +287,8 @@ mod tests {
             );
 
             let ntt_poly = ntt(&random_poly).expect("ntt() failed in test_ntt_random_polynomials");
-            let recovered_poly = inv_ntt(&ntt_poly);
+            let recovered_poly =
+                inv_ntt(&ntt_poly).expect("inv_ntt() failed in test_ntt_random_polynomials");
 
             assert_eq!(
                 random_poly.coefficients, recovered_poly.coefficients,
@@ -294,7 +307,7 @@ mod tests {
         ]);
         let f_ntt = ntt(&f).expect("ntt() failed in test_degree_preservation");
 
-        let f_recovered = inv_ntt(&f_ntt);
+        let f_recovered = inv_ntt(&f_ntt).expect("inv_ntt() failed in test_degree_preservation");
         assert_eq!(
             f.coefficients.len(),
             f_recovered.coefficients.len(),
