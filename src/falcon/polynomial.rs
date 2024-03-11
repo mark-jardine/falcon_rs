@@ -64,14 +64,26 @@ impl Polynomial {
     pub fn merge(f_vec: Vec<Polynomial>) -> Polynomial {
         let f0 = f_vec.get(0).unwrap();
         let f1 = f_vec.get(1).unwrap();
-        let n: usize = f0.coefficients.len() * 2;
-        let mut f: Polynomial = Polynomial::new(vec![FiniteFieldElem::new(0); n]);
+        let length: usize = f0.coefficients.len() * 2;
+        let mut f: Polynomial = Polynomial::new(vec![FiniteFieldElem::new(0); length]);
 
-        for i in 0..n / 2 {
+        for i in 0..length / 2 {
             f.coefficients[2 * i] = f0.coefficients[i];
             f.coefficients[2 * i + 1] = f1.coefficients[i];
         }
 
         f
+    }
+
+    pub fn merge_fp(f0: Vec<f64>, f1: Vec<f64>) -> Vec<f64> {
+        let length = f0.len() * 2;
+        let mut f_merged = vec![0.0; length];
+
+        for i in 0..f0.len() {
+            f_merged[2 * i] = f0[i];
+            f_merged[2 * i + 1] = f1[i];
+        }
+
+        f_merged
     }
 }

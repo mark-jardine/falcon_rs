@@ -17,10 +17,18 @@
     for the full license text.
 */
 
-use super::fft_consts::ROOTS_DICT;
 use super::polynomial::Polynomial;
-use num_complex::Complex64;
+use super::{fft_consts::ROOTS_DICT, finite_field_element::FiniteFieldElem};
+use num_complex::{Complex, Complex64};
 use std::vec;
+
+#[derive(Debug)]
+enum FftError {
+    ZeroLengthPolynomial,
+    InvalidRootIndex,
+    FailedToSplitPolynomial,
+    FailedToMergePolynomial, // InvNttFailed,
+}
 
 /*
     Split a polynomial f into two polynomials
@@ -33,11 +41,14 @@ use std::vec;
 
     Reference: Algorithm 1 splitfft(FFT(f)) in Falcon's specification.
 */
-fn split_fft(f: Vec<Complex64>) -> (Vec<Complex64>, Vec<Complex64>) {
+fn split_fft(f: Vec<Complex64>) -> Result<(Vec<Complex64>, Vec<Complex64>), FftError> {
     let length: usize = f.len();
 
     // Precomputed roots of unity associated with FFT of size `length`
-    let w = ROOTS_DICT.get(&length).unwrap();
+    let w: &Vec<Complex<f64>> = match ROOTS_DICT.get(&length) {
+        Some(val) => val,
+        None => return Err(FftError::InvalidRootIndex),
+    };
 
     let mut f0 = vec![Complex64::new(0.0, 0.0); length / 2];
     let mut f1 = vec![Complex64::new(0.0, 0.0); length / 2];
@@ -47,7 +58,7 @@ fn split_fft(f: Vec<Complex64>) -> (Vec<Complex64>, Vec<Complex64>) {
         f1[i] = 0.5 * (f[2 * i] - f[2 * i + 1]) * w[2 * i].conj();
     }
 
-    (f0, f1)
+    Ok((f0, f1))
 }
 /*
     Merge two or three polynomials into a single polynomial f.
@@ -57,12 +68,17 @@ fn split_fft(f: Vec<Complex64>) -> (Vec<Complex64>, Vec<Complex64>) {
 
     Reference: algorithm 2 (mergefft_2) in Falcon's specification.
 */
-fn merge_fft(f_vec_fft: Vec<Vec<Complex64>>) -> Vec<Complex64> {
+fn merge_fft(f_vec_fft: Vec<Vec<Complex64>>) -> Result<Vec<Complex64>, FftError> {
     let f0_fft: Vec<Complex64> = f_vec_fft[0].clone();
     let f1_fft: Vec<Complex64> = f_vec_fft[1].clone();
 
     let length: usize = 2 * f0_fft.len();
-    let w: &Vec<Complex64> = ROOTS_DICT.get(&length).unwrap();
+
+    let w: &Vec<Complex<f64>> = match ROOTS_DICT.get(&length) {
+        Some(val) => val,
+        None => return Err(FftError::InvalidRootIndex),
+    };
+
     let mut f_fft: Vec<Complex64> = vec![Complex64::new(0.0, 0.0); length];
 
     for i in 0..(length / 2) {
@@ -70,7 +86,7 @@ fn merge_fft(f_vec_fft: Vec<Vec<Complex64>>) -> Vec<Complex64> {
         f_fft[2 * i + 1] = f0_fft[i] - w[2 * i] * f1_fft[i]
     }
 
-    f_fft
+    Ok(f_fft)
 }
 
 /*
@@ -82,7 +98,7 @@ fn merge_fft(f_vec_fft: Vec<Vec<Complex64>>) -> Vec<Complex64> {
     Returns:
         - A polynomial in FFT representation
 */
-fn fft(f: Polynomial) -> Vec<Complex64> {
+fn fft(f: Polynomial) -> Result<Vec<Complex64>, FftError> {
     let length: usize = f.coefficients.len();
     let mut f_fft: Vec<Complex64> = vec![];
 
@@ -91,14 +107,61 @@ fn fft(f: Polynomial) -> Vec<Complex64> {
 
     if length > 2 {
         let (f0, f1) = Polynomial::split(&f);
-        let f0_fft = fft(f0);
-        let f1_fft = fft(f1);
-        f_fft = merge_fft(vec![f0_fft, f1_fft]);
+        let f0_fft = fft(f0)?;
+        let f1_fft = fft(f1)?;
+        f_fft = match merge_fft(vec![f0_fft, f1_fft]) {
+            Ok(val) => val,
+            Err(_e) => return Err(FftError::FailedToMergePolynomial),
+        }
     } else if length == 2 {
         f_fft = vec![Complex64::new(0.0, 0.0); length];
         f_fft[0] = Complex64::new(f_coeff[0] as f64, 1.0 * f_coeff[1] as f64);
         f_fft[1] = Complex64::new(f_coeff[0] as f64, -1.0 * f_coeff[1] as f64);
     }
 
-    f_fft
+    Ok(f_fft)
+}
+
+fn inv_fft(f_fft: Vec<Complex64>) -> Result<Vec<f64>, FftError> {
+    let length: usize = f_fft.len();
+
+    let mut f: Vec<f64> = vec![];
+
+    if length > 2 {
+        let (f0_fft, f1_fft) = split_fft(f_fft)?;
+        let f0 = inv_fft(f0_fft)?;
+        let f1 = inv_fft(f1_fft)?;
+        f = Polynomial::merge_fp(f0, f1);
+    } else if length == 2 {
+        f = vec![0.0; length];
+        f[0] = f_fft[0].re;
+    }
+
+    Ok(f)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::falcon::finite_field_element::FiniteFieldElem;
+
+    #[test]
+    fn test_fft_degree_preservation() {
+        let f = Polynomial::new(vec![
+            FiniteFieldElem::new(1),
+            FiniteFieldElem::new(2),
+            FiniteFieldElem::new(3),
+            FiniteFieldElem::new(4),
+        ]);
+
+        let f_fft = fft(f).expect("fft() failed in test_fft_degree_preservation().");
+
+        // Assuming fft() pads the input to the nearest power of 2
+        let expected_length = 4;
+        assert_eq!(
+            f_fft.len(),
+            expected_length,
+            "FFT should preserve the degree after padding."
+        );
+    }
 }

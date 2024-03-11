@@ -219,11 +219,9 @@ mod tests {
 
         // Compute the NTT of f
         let f_ntt = ntt(&f).expect("ntt() failed in test_ntt_and_inv_ntt");
-        // println!("f after ntt computation: {f_ntt:?}");
 
         // Compute the inverse NTT of f_ntt
         let f_recovered = inv_ntt(&f_ntt).expect("inv_ntt() failed in test_ntt_and_inv_ntt");
-        // println!("f after inv_ntt computation: {f_recovered:?}");
 
         // Check if f_recovered is equal to f
         assert_eq!(
