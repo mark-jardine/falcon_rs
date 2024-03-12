@@ -98,27 +98,24 @@ fn merge_fft(f_vec_fft: Vec<Vec<Complex64>>) -> Result<Vec<Complex64>, FftError>
     Returns:
         - A polynomial in FFT representation
 */
-fn fft(f: Polynomial) -> Result<Vec<Complex64>, FftError> {
-    let length: usize = f.coefficients.len();
+fn fft(f: Vec<Complex64>) -> Result<Vec<Complex64>, FftError> {
+    let length: usize = f.len();
     let mut f_fft: Vec<Complex64> = vec![];
-
-    //Get u32 values as Vec<u32> from Polyomial's Vec<FiniteFieldElem> `coefficients`
-    let f_coeff: Vec<u32> = f.coefficients.iter().map(|x| x.value).collect();
+    println!("f:{f:?}\n");
 
     if length > 2 {
-        let (f0, f1) = Polynomial::split(&f);
+        let (f0, f1) = Polynomial::split_fp(&f);
         let f0_fft = fft(f0)?;
         let f1_fft = fft(f1)?;
-        f_fft = match merge_fft(vec![f0_fft, f1_fft]) {
-            Ok(val) => val,
-            Err(_e) => return Err(FftError::FailedToMergePolynomial),
-        }
+        f_fft = merge_fft(vec![f0_fft, f1_fft])?;
     } else if length == 2 {
+        // Base case handling as before
         f_fft = vec![Complex64::new(0.0, 0.0); length];
-        f_fft[0] = Complex64::new(f_coeff[0] as f64, 1.0 * f_coeff[1] as f64);
-        f_fft[1] = Complex64::new(f_coeff[0] as f64, -1.0 * f_coeff[1] as f64);
+        f_fft[0] = f[0] + Complex64::new(0.0, 1.0) * f[1];
+        f_fft[1] = f[0] - Complex64::new(0.0, 1.0) * f[1];
     }
 
+    println!("\nf_fft:{f_fft:?}");
     Ok(f_fft)
 }
 
@@ -143,16 +140,15 @@ fn inv_fft(f_fft: Vec<Complex64>) -> Result<Vec<f64>, FftError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::falcon::finite_field_element::FiniteFieldElem;
 
     #[test]
     fn test_fft_degree_preservation() {
-        let f = Polynomial::new(vec![
-            FiniteFieldElem::new(1),
-            FiniteFieldElem::new(2),
-            FiniteFieldElem::new(3),
-            FiniteFieldElem::new(4),
-        ]);
+        let f = vec![
+            Complex64::new(1.0, 1.0),
+            Complex64::new(2.0, 2.0),
+            Complex64::new(3.0, 3.0),
+            Complex64::new(4.0, 4.0),
+        ];
 
         let f_fft = fft(f).expect("fft() failed in test_fft_degree_preservation().");
 
@@ -163,5 +159,130 @@ mod tests {
             expected_length,
             "FFT should preserve the degree after padding."
         );
+    }
+
+    #[test]
+    fn test_fft_basic() {
+        let inputs_and_expected = vec![
+            (
+                vec![
+                    Complex64::new(1.0, 0.0),
+                    Complex64::new(2.0, 0.0),
+                    Complex64::new(3.0, 0.0),
+                    Complex64::new(4.0, 0.0),
+                ],
+                vec![
+                    Complex64::new(-0.41421356237309204, 7.242640687119286),
+                    Complex64::new(2.4142135623730923, -1.2426406871192857),
+                    Complex64::new(-0.41421356237309204, -7.242640687119286),
+                    Complex64::new(2.4142135623730923, 1.2426406871192857),
+                ],
+            ),
+            (
+                vec![
+                    Complex64::new(0.0, 0.0),
+                    Complex64::new(0.0, 0.0),
+                    Complex64::new(0.0, 0.0),
+                    Complex64::new(0.0, 0.0),
+                ],
+                vec![
+                    Complex64::new(0.0, 0.0),
+                    Complex64::new(0.0, 0.0),
+                    Complex64::new(0.0, 0.0),
+                    Complex64::new(0.0, 0.0),
+                ],
+            ),
+        ];
+
+        for (input, expected) in inputs_and_expected {
+            let result = fft(input); // Assuming your Rust FFT function is named `fft` and returns a `Result<Vec<Complex64>, Error>`
+            assert_eq!(result.unwrap(), expected);
+        }
+    }
+
+    fn assert_complex_vec_eq(result: &[Complex64], expected: &[Complex64], epsilon: f64) {
+        assert_eq!(result.len(), expected.len(), "Vector lengths differ");
+        for (i, (r, e)) in result.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (r.re - e.re).abs() < epsilon && (r.im - e.im).abs() < epsilon,
+                "Mismatch at index {}: expected {:?}, got {:?}",
+                i,
+                e,
+                r
+            );
+        }
+    }
+
+    #[test]
+    fn test_fft_zero_polynomial() {
+        let input = vec![
+            Complex64::new(0.0, 0.0),
+            Complex64::new(0.0, 0.0),
+            Complex64::new(0.0, 0.0),
+            Complex64::new(0.0, 0.0),
+        ];
+        let expected_output = vec![
+            Complex64::new(0.0, 0.0),
+            Complex64::new(0.0, 0.0),
+            Complex64::new(0.0, 0.0),
+            Complex64::new(0.0, 0.0),
+        ];
+        let result = fft(input).unwrap();
+        assert_complex_vec_eq(&result, &expected_output, 1e-9);
+    }
+
+    #[test]
+    fn test_fft_single_non_zero_coefficient() {
+        let input = vec![
+            Complex64::new(0.0, 0.0),
+            Complex64::new(0.0, 0.0),
+            Complex64::new(0.0, 0.0),
+            Complex64::new(10.0, 0.0),
+        ];
+        let expected_output = vec![
+            Complex64::new(-7.071067811865475, 7.071067811865475),
+            Complex64::new(7.071067811865475, -7.071067811865475),
+            Complex64::new(-7.071067811865475, -7.071067811865475),
+            Complex64::new(7.071067811865475, 7.071067811865475),
+        ];
+        let result = fft(input).unwrap();
+        assert_complex_vec_eq(&result, &expected_output, 1e-9);
+    }
+
+    #[test]
+    fn test_fft_all_ones_polynomial() {
+        let input = vec![
+            Complex64::new(1.0, 0.0),
+            Complex64::new(1.0, 0.0),
+            Complex64::new(1.0, 0.0),
+            Complex64::new(1.0, 0.0),
+        ];
+        let expected_output = vec![
+            Complex64::new(1.0, 2.414213562373095),
+            Complex64::new(1.0, -0.4142135623730949),
+            Complex64::new(1.0, -2.414213562373095),
+            Complex64::new(1.0, 0.4142135623730949),
+        ];
+        let result = fft(input).unwrap();
+        assert_complex_vec_eq(&result, &expected_output, 1e-9);
+    }
+
+    #[test]
+    fn test_fft_alternating_sign_polynomial() {
+        let input = vec![
+            Complex64::new(1.0, 0.0),
+            Complex64::new(-1.0, 0.0),
+            Complex64::new(1.0, 0.0),
+            Complex64::new(-1.0, 0.0),
+        ];
+        let expected_output = vec![
+            Complex64::new(1.0, -0.4142135623730949),
+            Complex64::new(1.0, 2.414213562373095),
+            Complex64::new(1.0, 0.4142135623730949),
+            Complex64::new(1.0, -2.414213562373095),
+        ];
+
+        let result = fft(input).unwrap();
+        assert_complex_vec_eq(&result, &expected_output, 1e-9);
     }
 }

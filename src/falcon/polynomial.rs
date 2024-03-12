@@ -17,6 +17,8 @@
     A polynomial in coefficient format.
 */
 
+use num_complex::Complex64;
+
 use super::finite_field_element::FiniteFieldElem;
 #[derive(Debug, Clone)]
 pub struct Polynomial {
@@ -54,13 +56,32 @@ impl Polynomial {
 
         (f0, f1)
     }
+    /*
+        Splits a fft polynomial into two polynomials, one containing the even indices, and the other containing the odd.
+
+        Floating point version of Polynomial::split(), used for FFT.
+    */
+    pub fn split_fp(f: &Vec<Complex64>) -> (Vec<Complex64>, Vec<Complex64>) {
+        let mut f0: Vec<Complex64> = Vec::new();
+        let mut f1: Vec<Complex64> = Vec::new();
+
+        for (i, &value) in f.iter().enumerate() {
+            if i % 2 == 0 {
+                f0.push(value);
+            } else {
+                f1.push(value);
+            }
+        }
+
+        (f0, f1)
+    }
 
     /*
-    Merges two polynomials into a single polynomial by interleaving their coefficients.
+       Merges two polynomials into a single polynomial by interleaving their coefficients.
 
-    Used after NTT computations to recombine the polynomial. Called in reverse order to that of
-    split(). merge() is also called recursively in this manner.
-     */
+       Used after NTT computations to recombine the polynomial. Called in reverse order to that of
+       split(). merge() is also called recursively in this manner.
+    */
     pub fn merge(f_vec: Vec<Polynomial>) -> Polynomial {
         let f0 = f_vec.get(0).unwrap();
         let f1 = f_vec.get(1).unwrap();
@@ -75,6 +96,11 @@ impl Polynomial {
         f
     }
 
+    /*
+       Merges two fft polynomials into a single polynomial by interleaving their coefficients.
+
+       Floating point version of Polynomial::merge(), used for FFT.
+    */
     pub fn merge_fp(f0: Vec<f64>, f1: Vec<f64>) -> Vec<f64> {
         let length = f0.len() * 2;
         let mut f_merged = vec![0.0; length];
