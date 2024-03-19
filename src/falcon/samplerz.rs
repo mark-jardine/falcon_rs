@@ -85,27 +85,17 @@ const C: [u64; 13] = [
 /*
     Sample z0 in {0, 1, ..., 18} with a distribution very close to the half-Gaussian D_{Z+, 0, MAX_SIGMA}.
 */
-fn base_sampler() -> u8 {
-    let mut rng = OsRng;
-
-    // Calculate bytes needed, rounding up
+fn base_sampler<R: RngCore>(rng: &mut R) -> u8 {
     let random_bytes_needed = (RCDT_PREC + 7) / 8;
-
-    // Buffer for 16 bytes, as u128 is 16 bytes long
     let mut buf = [0u8; 16];
 
-    // Fill the buffer with random bytes
     rng.fill_bytes(&mut buf);
-
-    // Interpret the needed bytes from the buffer as a u128 value
     let mut random_value: u128 = 0;
     for i in 0..random_bytes_needed {
         random_value |= (buf[i as usize] as u128) << (8 * i);
     }
 
-    // Iterate over RCDT, incrementing z0 for each element less than the random value.
     let mut z0: u8 = 0;
-
     for &elt in RCDT.iter() {
         if random_value < elt {
             z0 += 1;
@@ -130,55 +120,60 @@ fn base_sampler() -> u8 {
 */
 
 fn approxexp(x: f64, ccs: f64) -> u64 {
-    assert!(x > 0.0 && ccs > 0.0, "Both x and ccs must be positive.");
+    assert!(
+        x > 0.0 && ccs > 0.0,
+        "approxexp(): Both x and ccs must be positive.\nx:{x}, ccs:{ccs}"
+    );
 
-    println!("Initial x: {}, ccs: {}", x, ccs);
     // Convert x to a 64-bit integer representation for scaling
-    let z = (x * (1u64 << 63) as f64) as u64;
+    let two_pow_63 = 1u64 << 63;
+    let z: u64 = (x * two_pow_63 as f64) as u64;
     // Start with the first coefficient for polynomial evaluation
-    let mut y = C[0] as u128;
+    let mut y = C[0];
     // Polynomial approximation calculation
     for &elt in &C[1..] {
         // Horner's Method
-        y = (elt as u128).wrapping_sub(((z as u128).wrapping_mul(y) >> 63) as u128);
+        let z_mul_y = z as u128 * y as u128;
+        y = elt - (z_mul_y >> 63) as u64;
     }
 
     // Apply the scaling factor ccs
-    let z_scaled = (ccs as u128 * (1u128 << 63)) << 1;
+    let z_scaled: u128 = (f64::floor(ccs * (two_pow_63 as f64))) as u128;
 
-    y = ((z_scaled as u128).wrapping_mul(y) >> 63) as u128;
-    println!("y at the end: {y}");
-
-    y as u64
+    (z_scaled * y as u128 >> 63) as u64
 }
 
 /*
     Return a single bit, equal to 1 with probability ~ ccs * exp(-x).
     x > 0, ccs > 0
 */
-fn berexp(x: f64, ccs: f64) -> bool {
-    let mut rng: OsRng = OsRng;
+fn berexp<R: RngCore>(x: f64, ccs: f64, rng: &mut R) -> bool {
+    assert!(
+        x > 0.0 && ccs > 0.0,
+        "berexp(): Both x and ccs must be positive.\nx:{x}, ccs:{ccs}"
+    );
 
-    let mut s: f64 = x * ILN2;
-    let r: f64 = x - s * ILN2;
-
-    s = s.min(63.0);
+    let mut s: i64 = (x * ILN2) as i64;
+    let r: f64 = x - s as f64 * LN2;
+    s = i64::min(s, 63);
 
     // z = (approxexp(r, ccs) - 1) >> s
-    let z = (approxexp(r, ccs) as f64 - 1.0) / 2f64.powf(s);
+    let z = (((approxexp(r, ccs) as u128) - 1) >> s) as u64;
 
-    for i in (8..=56).rev().step_by(8) {
+    let mut w: i32 = 0;
+    for i in (0..=56).rev().step_by(8) {
         let p: u8 = rng.gen::<u8>();
 
         // w = p - ((z >> i) & 0xFF)
-        let last_8_bits = (z.to_bits() >> i) & 0xFF;
-        let w: i64 = p as i64 - last_8_bits as i64;
+        let last_8_bits = (z >> i) & 0xFF;
+        w = p as i32 - last_8_bits as i32;
 
         if w != 0 {
-            return w < 0;
+            break;
         }
     }
-    false
+
+    w < 0
 }
 
 /*
@@ -198,20 +193,24 @@ fn berexp(x: f64, ccs: f64) -> bool {
     - a sample z from the distribution D_{Z, mu, sigma}.
 */
 
-fn sampler_z<R: RngCore>(mu: f64, sigmin: f64, sigma_prime: f64, rng: &mut R) -> i64 {
-    let r = mu - mu.floor();
-    let ccs = sigmin / sigma_prime;
+fn sampler_z<R: RngCore>(mu: f64, sigmin: f64, sigma: f64, rng: &mut R) -> i64 {
+    let s = f64::floor(mu);
+    let r = mu - s;
+    let ccs = sigmin / sigma;
+    let dss = 1.0 / (2.0 * sigma * sigma);
 
     loop {
-        let z0 = base_sampler();
+        let z0 = base_sampler(rng);
         let b = rng.gen::<u8>() & 1;
         let z = b as i64 + (2 * b as i64 - 1) * z0 as i64;
-        let x = ((z as f64 - r).powi(2) / (2.0 * sigma_prime.powi(2)))
-            - (z0.pow(2) as f64 / (2.0 * MAX_SIGMA.powi(2)));
+        let z_minus_r = z as f64 - r;
 
-        if berexp(x, ccs) {
-            // Implement BerExp based on the specification
-            return z + mu.floor() as i64;
+        let mut x = (z_minus_r * z_minus_r) * dss;
+
+        x -= (z0 * z0) as f64 * INV_2SIGMA2;
+
+        if berexp(x, ccs, rng) {
+            return z + s as i64;
         }
     }
 }
@@ -244,12 +243,18 @@ mod tests {
     }
 
     impl RngCore for MockRng {
+        //Get next u32, pads with zeroes if self.bytes % 4 > 0
         fn next_u32(&mut self) -> u32 {
-            let res =
-                u32::from_le_bytes(self.bytes[self.index..self.index + 4].try_into().unwrap());
-            self.index += 4;
+            if self.index >= self.bytes.len() {
+                return 0; // Return 0 if there are no more bytes to read
+            }
 
-            res
+            let mut bytes = [0u8; 4];
+            let len = std::cmp::min(4, self.bytes.len() - self.index);
+            bytes[..len].copy_from_slice(&self.bytes[self.index..self.index + len]);
+            self.index += len;
+
+            u32::from_le_bytes(bytes)
         }
 
         fn next_u64(&mut self) -> u64 {
@@ -262,15 +267,22 @@ mod tests {
 
         // Insecure implementation used for the purpose of mocking RNG
         fn fill_bytes(&mut self, dest: &mut [u8]) {
-            if dest.len() >= self.bytes.len() - self.index {
+            let remaining = self.bytes.len().checked_sub(self.index).unwrap_or(0);
+            if dest.len() > remaining {
                 self.index = 0;
-                panic!("MockRng fill_bytes() does not accept a dest longer than self.bytes");
+                panic!(
+                    "MockRng fill_bytes() does not accept a dest longer than the remaining bytes"
+                );
             }
 
             for i in dest.iter_mut() {
                 *i = self.next_u8();
             }
-            self.index += dest.len();
+
+            self.index = self
+                .index
+                .checked_add(dest.len())
+                .unwrap_or(self.bytes.len());
         }
 
         fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
@@ -441,10 +453,22 @@ mod tests {
             },
         ];
 
+        let mut count = 1;
         for kat in kats {
-            println!("Kat: {kat:?}");
-            let mut rng: &mut MockRng = &mut MockRng::new((*kat.random_bytes).to_vec());
-            assert!(sampler_z(kat.mu, sigma_min, kat.sigma_prime, rng) == kat.output_z as i64)
+            let bytes: &[u8] = kat.random_bytes;
+            let mut rng = MockRng::new((bytes).to_vec());
+
+            println!("Kat {count}");
+            println!("bytes: {bytes:?}, bytes len: {}\n", bytes.len());
+
+            let output = sampler_z(kat.mu, sigma_min, kat.sigma_prime, &mut rng);
+            let expected_output = kat.output_z;
+            assert_eq!(
+                output, kat.output_z as i64,
+                "Output was {output}, expected {expected_output}"
+            );
+
+            count += 1;
         }
     }
 }
