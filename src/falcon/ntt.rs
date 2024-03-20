@@ -50,7 +50,9 @@ const SQRT_1: u32 = 1479;
     Returns:
         A tuple of polynomials in ntt representation
 */
-fn split_ntt(f_ntt: &Polynomial) -> Result<(Polynomial, Polynomial), NttError> {
+fn split_ntt(
+    f_ntt: &Polynomial<FiniteFieldElem>,
+) -> Result<(Polynomial<FiniteFieldElem>, Polynomial<FiniteFieldElem>), NttError> {
     let length: usize = f_ntt.coefficients.len();
 
     let w: &Vec<i32> = match ROOTS_DICT_ZQ.get(&length) {
@@ -58,8 +60,10 @@ fn split_ntt(f_ntt: &Polynomial) -> Result<(Polynomial, Polynomial), NttError> {
         None => return Err(NttError::InvalidRootIndex),
     };
 
-    let mut f0_ntt: Polynomial = Polynomial::new(vec![FiniteFieldElem::new(0); length / 2]);
-    let mut f1_ntt: Polynomial = Polynomial::new(vec![FiniteFieldElem::new(0); length / 2]);
+    let mut f0_ntt: Polynomial<FiniteFieldElem> =
+        Polynomial::new(vec![FiniteFieldElem::new(0); length / 2]);
+    let mut f1_ntt: Polynomial<FiniteFieldElem> =
+        Polynomial::new(vec![FiniteFieldElem::new(0); length / 2]);
 
     for i in 0..length / 2 {
         f0_ntt.coefficients[i].value = (I2 as u32
@@ -87,7 +91,9 @@ fn split_ntt(f_ntt: &Polynomial) -> Result<(Polynomial, Polynomial), NttError> {
     Returns:
         A polynomial in ntt representation
 */
-fn merge_ntt(f_tup: (Polynomial, Polynomial)) -> Result<Polynomial, NttError> {
+fn merge_ntt(
+    f_tup: (Polynomial<FiniteFieldElem>, Polynomial<FiniteFieldElem>),
+) -> Result<Polynomial<FiniteFieldElem>, NttError> {
     let (f0_ntt, f1_ntt) = f_tup;
     let length: usize = f0_ntt.coefficients.len() * 2 as usize;
 
@@ -100,7 +106,8 @@ fn merge_ntt(f_tup: (Polynomial, Polynomial)) -> Result<Polynomial, NttError> {
         None => return Err(NttError::InvalidRootIndex),
     };
 
-    let mut f_ntt: Polynomial = Polynomial::new(vec![FiniteFieldElem::new(0); length]);
+    let mut f_ntt: Polynomial<FiniteFieldElem> =
+        Polynomial::new(vec![FiniteFieldElem::new(0); length]);
 
     for i in 0..length / 2 {
         // Value of w[2*i]
@@ -127,14 +134,14 @@ fn merge_ntt(f_tup: (Polynomial, Polynomial)) -> Result<Polynomial, NttError> {
     Returns:
         f_ntt - a polynomial in ntt representation
 */
-fn ntt(f: &Polynomial) -> Result<Polynomial, NttError> {
+fn ntt(f: &Polynomial<FiniteFieldElem>) -> Result<Polynomial<FiniteFieldElem>, NttError> {
     let len: usize = f.coefficients.len();
-    let mut f_ntt: Polynomial = Polynomial::new(vec![]);
+    let mut f_ntt: Polynomial<FiniteFieldElem> = Polynomial::new(vec![]);
 
     if len > 2 {
-        let (f0, f1) = Polynomial::split(&f);
-        let f0_ntt: Polynomial = ntt(&f0)?;
-        let f1_ntt: Polynomial = ntt(&f1)?;
+        let (f0, f1) = Polynomial::<FiniteFieldElem>::split(&f);
+        let f0_ntt: Polynomial<FiniteFieldElem> = ntt(&f0)?;
+        let f1_ntt: Polynomial<FiniteFieldElem> = ntt(&f1)?;
 
         match merge_ntt((f0_ntt, f1_ntt)) {
             Ok(f) => {
@@ -160,9 +167,9 @@ fn ntt(f: &Polynomial) -> Result<Polynomial, NttError> {
     Ok(f_ntt)
 }
 
-fn inv_ntt(f_ntt: &Polynomial) -> Result<Polynomial, NttError> {
+fn inv_ntt(f_ntt: &Polynomial<FiniteFieldElem>) -> Result<Polynomial<FiniteFieldElem>, NttError> {
     let len: usize = f_ntt.coefficients.len();
-    let mut f: Polynomial = Polynomial::new(vec![]);
+    let mut f: Polynomial<FiniteFieldElem> = Polynomial::new(vec![]);
 
     if len > 2 {
         let (f0_ntt, f1_ntt) = match split_ntt(&f_ntt) {
@@ -184,7 +191,7 @@ fn inv_ntt(f_ntt: &Polynomial) -> Result<Polynomial, NttError> {
             Err(_) => return Err(NttError::InvNttFailed),
         };
 
-        f = Polynomial::merge(vec![f0, f1]);
+        f = Polynomial::<FiniteFieldElem>::merge(vec![f0, f1]);
     } else if len == 2 {
         f = Polynomial::new(vec![FiniteFieldElem::new(0); len]);
         let inv_mod_q_at_1459 =

@@ -14,19 +14,26 @@
 */
 
 /*
-    A polynomial in coefficient format.
+    A polynomial that accepts a vector of generic T.
+
+    For coefficient format, `FiniteFieldElem` is used
+    For FFT format, `Complex64` is used.
 */
 
 use num_complex::Complex64;
 
 use super::finite_field_element::FiniteFieldElem;
+
 #[derive(Debug, Clone)]
-pub struct Polynomial {
-    pub coefficients: Vec<FiniteFieldElem>,
+pub struct Polynomial<T> {
+    pub coefficients: Vec<T>,
 }
 
-impl Polynomial {
-    pub fn new(_coefficients: Vec<FiniteFieldElem>) -> Self {
+impl<T> Polynomial<T>
+where
+    T: Clone + Copy + Default,
+{
+    pub fn new(_coefficients: Vec<T>) -> Self {
         Polynomial {
             coefficients: _coefficients,
         }
@@ -40,7 +47,9 @@ impl Polynomial {
     This will produce incorrect values in the case that the number of coefficients
     in p is not even.
      */
-    pub fn split(p: &Polynomial) -> (Polynomial, Polynomial) {
+    pub fn split(
+        p: &Polynomial<FiniteFieldElem>,
+    ) -> (Polynomial<FiniteFieldElem>, Polynomial<FiniteFieldElem>) {
         let length: usize = p.coefficients.len();
 
         let mut f0_coeffs: Vec<FiniteFieldElem> = Vec::new();
@@ -51,8 +60,8 @@ impl Polynomial {
             f1_coeffs.push(p.coefficients[2 * i + 1].clone());
         }
 
-        let f0: Polynomial = Polynomial::new(f0_coeffs);
-        let f1: Polynomial = Polynomial::new(f1_coeffs);
+        let f0: Polynomial<FiniteFieldElem> = Polynomial::new(f0_coeffs);
+        let f1: Polynomial<FiniteFieldElem> = Polynomial::new(f1_coeffs);
 
         (f0, f1)
     }
@@ -61,15 +70,15 @@ impl Polynomial {
 
         Floating point version of Polynomial::split(), used for FFT.
     */
-    pub fn split_fp(f: &Vec<Complex64>) -> (Vec<Complex64>, Vec<Complex64>) {
-        let mut f0: Vec<Complex64> = Vec::new();
-        let mut f1: Vec<Complex64> = Vec::new();
+    pub fn split_fp(f: &Polynomial<Complex64>) -> (Polynomial<Complex64>, Polynomial<Complex64>) {
+        let mut f0: Polynomial<Complex64> = Polynomial::new(vec![]);
+        let mut f1: Polynomial<Complex64> = Polynomial::new(vec![]);
 
-        for (i, &value) in f.iter().enumerate() {
+        for (i, &value) in f.coefficients.iter().enumerate() {
             if i % 2 == 0 {
-                f0.push(value);
+                f0.coefficients.push(value);
             } else {
-                f1.push(value);
+                f1.coefficients.push(value);
             }
         }
 
@@ -82,11 +91,15 @@ impl Polynomial {
        Used after NTT computations to recombine the polynomial. Called in reverse order to that of
        split(). merge() is also called recursively in this manner.
     */
-    pub fn merge(f_vec: Vec<Polynomial>) -> Polynomial {
+    pub fn merge(f_vec: Vec<Polynomial<FiniteFieldElem>>) -> Polynomial<FiniteFieldElem>
+    where
+        T: Default,
+    {
         let f0 = f_vec.get(0).unwrap();
         let f1 = f_vec.get(1).unwrap();
         let length: usize = f0.coefficients.len() * 2;
-        let mut f: Polynomial = Polynomial::new(vec![FiniteFieldElem::new(0); length]);
+        let mut f: Polynomial<FiniteFieldElem> =
+            Polynomial::new(vec![FiniteFieldElem::default(); length]);
 
         for i in 0..length / 2 {
             f.coefficients[2 * i] = f0.coefficients[i];
@@ -101,13 +114,13 @@ impl Polynomial {
 
        Floating point version of Polynomial::merge(), used for FFT.
     */
-    pub fn merge_fp(f0: Vec<f64>, f1: Vec<f64>) -> Vec<f64> {
-        let length = f0.len() * 2;
-        let mut f_merged = vec![0.0; length];
+    pub fn merge_fp(f0: Polynomial<f64>, f1: Polynomial<f64>) -> Polynomial<f64> {
+        let length = f0.coefficients.len() * 2;
+        let mut f_merged: Polynomial<f64> = Polynomial::new(vec![]);
 
-        for i in 0..f0.len() {
-            f_merged[2 * i] = f0[i];
-            f_merged[2 * i + 1] = f1[i];
+        for i in 0..f0.coefficients.len() {
+            f_merged.coefficients[2 * i] = f0.coefficients[i];
+            f_merged.coefficients[2 * i + 1] = f1.coefficients[i];
         }
 
         f_merged

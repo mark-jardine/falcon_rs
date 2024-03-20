@@ -33,6 +33,12 @@ impl PartialEq for FiniteFieldElem {
     }
 }
 
+impl Default for FiniteFieldElem {
+    fn default() -> Self {
+        FiniteFieldElem::new(0)
+    }
+}
+
 //todo: maybe change val to be u32, likewise for Q
 impl FiniteFieldElem {
     pub fn new(val: u32) -> Self {
