@@ -17,10 +17,7 @@
     for the full license text.
 */
 
-use std::{os, ptr::null};
-
-// Use rand::OsRng for high-quality randomness
-use rand::{rngs::OsRng, Rng, RngCore};
+use rand::{Rng, RngCore};
 
 // Upper bound on all the values of sigma
 const MAX_SIGMA: f64 = 1.8205;
@@ -85,26 +82,17 @@ const C: [u64; 13] = [
 /*
     Sample z0 in {0, 1, ..., 18} with a distribution very close to the half-Gaussian D_{Z+, 0, MAX_SIGMA}.
 */
-fn base_sampler<R: RngCore>(rng: &mut R) -> u8 {
-    let random_bytes_needed = (RCDT_PREC + 7) / 8;
-    let mut buf = [0u8; 16];
+fn base_sampler(bytes: &[u8; 9]) -> i16 {
+    // Pad the input bytes to create a 16-byte array suitable for conversion to u128.
+    let padded_bytes = {
+        let mut temp = vec![0u8; 7];
+        temp.extend_from_slice(bytes);
+        temp.try_into().expect("Failed to create a 16-byte array")
+    };
 
-    rng.fill_bytes(&mut buf);
-    let mut random_value: u128 = 0;
-    for i in 0..random_bytes_needed {
-        random_value |= (buf[i as usize] as u128) << (8 * i);
-    }
+    let u = u128::from_le_bytes(padded_bytes);
 
-    let mut z0: u8 = 0;
-    for &elt in RCDT.iter() {
-        if random_value < elt {
-            z0 += 1;
-        } else {
-            break;
-        }
-    }
-
-    z0
+    RCDT.iter().filter(|&&r| u < r).count() as i16
 }
 
 /*
@@ -127,7 +115,7 @@ fn approxexp(x: f64, ccs: f64) -> u64 {
 
     // Convert x to a 64-bit integer representation for scaling
     let two_pow_63 = 1u64 << 63;
-    let z: u64 = (x * two_pow_63 as f64) as u64;
+    let z: u64 = f64::floor(x * two_pow_63 as f64) as u64;
     // Start with the first coefficient for polynomial evaluation
     let mut y = C[0];
     // Polynomial approximation calculation
@@ -147,22 +135,22 @@ fn approxexp(x: f64, ccs: f64) -> u64 {
     Return a single bit, equal to 1 with probability ~ ccs * exp(-x).
     x > 0, ccs > 0
 */
-fn berexp<R: RngCore>(x: f64, ccs: f64, rng: &mut R) -> bool {
+fn berexp(x: f64, ccs: f64, rand_bytes: &[u8; 7]) -> bool {
     assert!(
         x > 0.0 && ccs > 0.0,
         "berexp(): Both x and ccs must be positive.\nx:{x}, ccs:{ccs}"
     );
 
-    let mut s: i64 = (x * ILN2) as i64;
+    let mut s: i64 = f64::floor(x * ILN2) as i64;
     let r: f64 = x - s as f64 * LN2;
     s = i64::min(s, 63);
 
     // z = (approxexp(r, ccs) - 1) >> s
-    let z = (((approxexp(r, ccs) as u128) - 1) >> s) as u64;
+    let z = ((((approxexp(r, ccs) as u128) << 1) - 1) >> s) as u64;
 
     let mut w: i32 = 0;
     for i in (0..=56).rev().step_by(8) {
-        let p: u8 = rng.gen::<u8>();
+        let p: u8 = rand_bytes[i % 8];
 
         // w = p - ((z >> i) & 0xFF)
         let last_8_bits = (z >> i) & 0xFF;
@@ -193,24 +181,30 @@ fn berexp<R: RngCore>(x: f64, ccs: f64, rng: &mut R) -> bool {
     - a sample z from the distribution D_{Z, mu, sigma}.
 */
 
-fn sampler_z<R: RngCore>(mu: f64, sigmin: f64, sigma: f64, rng: &mut R) -> i64 {
-    let s = f64::floor(mu);
-    let r = mu - s;
-    let ccs = sigmin / sigma;
-    let dss = 1.0 / (2.0 * sigma * sigma);
+pub fn samplerz<R: RngCore>(mu: f64, sigmin: f64, sigma: f64, rng: &mut R) -> i64 {
+    let s: f64 = f64::floor(mu);
+    let r: f64 = mu - s;
+    let ccs: f64 = sigmin / sigma;
+    let dss: f64 = 1.0 / (2.0 * sigma * sigma);
 
     loop {
-        let z0 = base_sampler(rng);
-        let b = rng.gen::<u8>() & 1;
-        let z = b as i64 + (2 * b as i64 - 1) * z0 as i64;
-        let z_minus_r = z as f64 - r;
+        let mut bytes = [0u8; 9];
+        rng.fill_bytes(&mut bytes);
+        let z0 = base_sampler(&bytes);
 
-        let mut x = (z_minus_r * z_minus_r) * dss;
+        let byte: u8 = rng.gen();
+        let byte_sig = (byte & 1) as i16;
+        let z = byte_sig + ((byte_sig << 1) - 1) * z0 as i16;
+        let z_minus_r: f64 = z as f64 - r;
 
-        x -= (z0 * z0) as f64 * INV_2SIGMA2;
+        let mut x: f64 = (z_minus_r * z_minus_r) * dss;
 
-        if berexp(x, ccs, rng) {
-            return z + s as i64;
+        x -= (z0 as f64 * z0 as f64) * INV_2SIGMA2;
+
+        let mut bytes = [0u8; 7];
+        rng.fill_bytes(&mut bytes);
+        if berexp(x, ccs, &bytes) {
+            return z as i64 + s as i64;
         }
     }
 }
@@ -246,7 +240,7 @@ mod tests {
         //Get next u32, pads with zeroes if self.bytes % 4 > 0
         fn next_u32(&mut self) -> u32 {
             if self.index >= self.bytes.len() {
-                return 0; // Return 0 if there are no more bytes to read
+                return 0;
             }
 
             let mut bytes = [0u8; 4];
@@ -268,21 +262,17 @@ mod tests {
         // Insecure implementation used for the purpose of mocking RNG
         fn fill_bytes(&mut self, dest: &mut [u8]) {
             let remaining = self.bytes.len().checked_sub(self.index).unwrap_or(0);
-            if dest.len() > remaining {
-                self.index = 0;
-                panic!(
-                    "MockRng fill_bytes() does not accept a dest longer than the remaining bytes"
-                );
-            }
 
-            for i in dest.iter_mut() {
+            for i in dest.iter_mut().take(remaining) {
                 *i = self.next_u8();
             }
 
-            self.index = self
-                .index
-                .checked_add(dest.len())
-                .unwrap_or(self.bytes.len());
+            if dest.len() > remaining {
+                for i in dest.iter_mut().skip(remaining) {
+                    *i = 0;
+                }
+            }
+            self.index += remaining.min(dest.len());
         }
 
         fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
@@ -461,8 +451,11 @@ mod tests {
             println!("Kat {count}");
             println!("bytes: {bytes:?}, bytes len: {}\n", bytes.len());
 
-            let output = sampler_z(kat.mu, sigma_min, kat.sigma_prime, &mut rng);
+            let output = samplerz(kat.mu, sigma_min, kat.sigma_prime, &mut rng);
             let expected_output = kat.output_z;
+
+            println!("Output: [{output}], Expected:[{expected_output}]\n");
+
             assert_eq!(
                 output, kat.output_z as i64,
                 "Output was {output}, expected {expected_output}"
