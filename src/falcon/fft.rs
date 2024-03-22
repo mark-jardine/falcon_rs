@@ -23,7 +23,7 @@ use num_complex::{Complex, Complex64};
 use std::vec;
 
 #[derive(Debug)]
-enum FftError {
+pub enum FftError {
     ZeroLengthPolynomial,
     InvalidRootIndex,
     FailedToSplitPolynomial,
@@ -72,8 +72,8 @@ fn split_fft(
     Reference: algorithm 2 (mergefft_2) in Falcon's specification.
 */
 fn merge_fft(f_vec_fft: Vec<Polynomial<Complex64>>) -> Result<Polynomial<Complex64>, FftError> {
-    let f0_fft: Polynomial<Complex<f64>> = f_vec_fft[0].clone();
-    let f1_fft: Polynomial<Complex<f64>> = f_vec_fft[1].clone();
+    let f0_fft: &Polynomial<Complex<f64>> = &f_vec_fft[0];
+    let f1_fft: &Polynomial<Complex<f64>> = &f_vec_fft[1];
 
     let length: usize = 2 * f0_fft.coefficients.len();
 
@@ -102,7 +102,7 @@ fn merge_fft(f_vec_fft: Vec<Polynomial<Complex64>>) -> Result<Polynomial<Complex
     Returns:
         - A polynomial in FFT representation
 */
-fn fft(f: Polynomial<Complex64>) -> Result<Polynomial<Complex64>, FftError> {
+pub fn fft(f: Polynomial<Complex64>) -> Result<Polynomial<Complex64>, FftError> {
     let length: usize = f.coefficients.len();
     let mut f_fft: Polynomial<Complex64> = Polynomial::new(vec![]);
 
