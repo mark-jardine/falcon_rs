@@ -98,12 +98,12 @@ pub fn ntru_solve(
         let g0 = g.coefficients[0].clone();
         let (d, u, v) = xgcd(f0, g0);
         if d != BigInt::from(1) {
-            return Err(NtruError::XgcdError);
+            Err(NtruError::XgcdError)
         } else {
-            return Ok((
+            Ok((
                 Polynomial::new(vec![(v * -BigInt::from(Q))]),
                 Polynomial::new(vec![BigInt::from(Q) * u]),
-            ));
+            ))
         }
     } else {
         let fp = Polynomial::field_norm(&f);
