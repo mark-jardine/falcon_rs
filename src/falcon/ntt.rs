@@ -20,7 +20,7 @@
 use super::finite_field_element::{FiniteFieldElem, Q};
 use super::ntt_consts::{INV_MOD_Q, ROOTS_DICT_ZQ};
 use super::polynomial::Polynomial;
-use std::ops::Add;
+
 use std::vec;
 
 #[derive(Debug)]

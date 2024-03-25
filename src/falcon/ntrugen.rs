@@ -1,6 +1,6 @@
-use std::error::Error;
 
-use num_bigint::{BigInt, Sign};
+
+use num_bigint::{BigInt};
 
 use super::{finite_field_element::Q, polynomial::Polynomial};
 

@@ -50,8 +50,8 @@ fn extended_gcd(a: &BigInt, b: &BigInt) -> (BigInt, BigInt, BigInt) {
 // }
 
 mod tests{
-    use super::*;
-    use num_bigint::ToBigInt;
+    
+    
 
     #[test]
     fn test_mod_pow() {
