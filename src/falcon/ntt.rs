@@ -257,7 +257,7 @@ mod tests {
         // Compute sum of polynomials before NTT
         let mut sum_before_ntt = poly_a.clone();
         for (i, coeff) in poly_b.coefficients.iter().enumerate() {
-            sum_before_ntt.coefficients[i] = sum_before_ntt.coefficients[i].add(*coeff);
+            sum_before_ntt.coefficients[i] = sum_before_ntt.coefficients[i] + *coeff;
         }
 
         // Compute NTT of the sum
@@ -268,7 +268,7 @@ mod tests {
         let ntt_b = ntt(&poly_b).expect("ntt() failed in test_ntt_linearity");
         let mut sum_of_ntts = ntt_a;
         for (i, coeff) in ntt_b.coefficients.iter().enumerate() {
-            sum_of_ntts.coefficients[i] = sum_of_ntts.coefficients[i].add(*coeff);
+            sum_of_ntts.coefficients[i] = sum_of_ntts.coefficients[i] + *coeff;
         }
 
         assert_eq!(

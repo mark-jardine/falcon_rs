@@ -24,11 +24,9 @@ const MAX_SIGMA: f64 = 1.8205;
 // INV_2SIGMA2 = 1 / (2 * (MAX_SIGMA ** 2))
 const INV_2SIGMA2: f64 = 1.0 / (2.0 * MAX_SIGMA * MAX_SIGMA);
 
-// ln(2) and 1 / ln(2), with ln the natural logarithm
-#[allow(clippy::approx_constant)]
-const LN2: f64 = 0.69314718056;
-#[allow(clippy::approx_constant)]
-const ILN2: f64 = 1.44269504089;
+// ln(2) and 1/ln(2)
+const LN2: f64 = std::f64::consts::LN_2;
+const ILN2: f64 = std::f64::consts::LOG2_E;
 
 /*
     RCDT is the reverse cumulative distribution table of a distribution that
