@@ -1,8 +1,9 @@
+use num_bigint::BigInt;
 
-
-use num_bigint::{BigInt};
-
-use super::{finite_field_element::Q, polynomial::Polynomial};
+use super::{
+    finite_field_element::Q,
+    polynomial::{karamul, Polynomial},
+};
 
 #[derive(Debug)]
 pub enum NtruError {
@@ -76,6 +77,17 @@ pub fn xgcd(mut b: BigInt, mut n: BigInt) -> (BigInt, BigInt, BigInt) {
     (b, x0, y0)
 }
 
+/*
+    Solve the NTRU equation for f and g.
+    Corresponds to NTRUSolve in Falcon's documentation.
+
+    Params:
+        - f: a Polynomial<BigInt>
+        - g: a Polynomial<BigInt>
+
+    Returns:
+        - (F, G), a tuple of Polynomial<BigInt> or an Error
+*/
 pub fn ntru_solve(
     f: Polynomial<BigInt>,
     g: Polynomial<BigInt>,
@@ -93,7 +105,26 @@ pub fn ntru_solve(
                 Polynomial::new(vec![BigInt::from(Q) * u]),
             ));
         }
+    } else {
+        let fp = Polynomial::field_norm(&f);
+        let gp = Polynomial::field_norm(&g);
+        let (capf_p, capg_p) = match ntru_solve(fp, gp) {
+            Ok(res) => res,
+            Err(_) => {
+                return Err(NtruError::Other(
+                    "Could not compute field norm for f: {f:?} and g: {g:?}".to_string(),
+                ))
+            }
+        };
+        let mut capf = Polynomial::new(karamul(
+            &Polynomial::lift(&capf_p).coefficients,
+            &Polynomial::galois_conjugate(&g).coefficients,
+        ));
+        let mut capg = Polynomial::new(karamul(
+            &Polynomial::lift(&capg_p).coefficients,
+            &Polynomial::galois_conjugate(&f).coefficients,
+        ));
+        let _ = Polynomial::reduce(f, g, &mut capf, &mut capg);
+        Ok((capf, capg))
     }
-
-    Ok((f, g))
 }

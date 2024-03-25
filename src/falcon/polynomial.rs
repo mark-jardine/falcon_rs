@@ -32,7 +32,7 @@ use num_bigint::BigInt;
 use num_complex::Complex64;
 use std::{
     error::Error,
-    ops::{Add, Div, Mul, Sub},
+    ops::{Add, Div, Mul, Neg, Sub, SubAssign},
 };
 
 #[derive(Debug, Clone)]
@@ -61,48 +61,36 @@ where
     }
 }
 
-impl Polynomial<FiniteFieldElem> {
-    /*
-       Galois conjugate of an element a in Q[x] / (x ** n + 1).
-       Here, the Galois conjugate of a(x) is simply a(-x).
-
-       Params:
-            - a reference to self: a Polynomial<FiniteFieldElem>
-
-        Returns:
-            - a Polynomial<FiniteFieldElem> representing the negated polynomial
-    */
-    pub fn galois_conjugate(&self) -> Self {
-        let conjugate_coeffs: Vec<FiniteFieldElem> = self
-            .coefficients
-            .iter()
-            .enumerate()
-            .map(|(i, &coeff)| if i % 2 == 0 { coeff } else { -coeff })
-            .collect();
-
-        Polynomial::new(conjugate_coeffs)
-    }
-
+impl<T> Polynomial<T>
+where
+    T: Clone
+        + Default
+        + Add<Output = T>
+        + Sub<Output = T>
+        + Mul<Output = T>
+        + SubAssign
+        + Neg<Output = T>,
+{
     /*
        Project an element a of Q[x] / (x ** n + 1) onto Q[x] / (x ** (n // 2) + 1).
        n must be a power-of-two.
 
       Params:
-           - a reference to self: a Polynomial<FiniteFieldElem>
+           - a reference to self: a Polynomial<T>
 
        Returns:
-           - a Polynomial<FiniteFieldElem>
+           - a Polynomial<T>
     */
     pub fn field_norm(&self) -> Self {
         let n = self.coefficients.len() / 2;
-        let mut even_coeffs: Vec<FiniteFieldElem> = vec![FiniteFieldElem::default(); n];
-        let mut odd_coeffs: Vec<FiniteFieldElem> = vec![FiniteFieldElem::default(); n];
+        let mut even_coeffs: Vec<T> = vec![T::default(); n];
+        let mut odd_coeffs: Vec<T> = vec![T::default(); n];
 
-        for (i, &coeff) in self.coefficients.iter().enumerate() {
+        for (i, coeff) in self.coefficients.iter().enumerate() {
             if i % 2 == 0 {
-                even_coeffs.push(coeff);
+                even_coeffs.push(coeff.clone());
             } else {
-                odd_coeffs.push(coeff);
+                odd_coeffs.push(coeff.clone());
             }
         }
         let even_coeffs_sq = karamul(&even_coeffs, &even_coeffs);
@@ -112,10 +100,37 @@ impl Polynomial<FiniteFieldElem> {
         res.iter_mut()
             .skip(1)
             .enumerate()
-            .for_each(|(index, curr)| *curr -= even_coeffs_sq[index - 1]);
-        res[0] = odd_coeffs_sq[n - 1];
+            .for_each(|(index, curr)| *curr -= even_coeffs_sq[index - 1].clone());
+        res[0] = odd_coeffs_sq[n - 1].clone();
 
         Polynomial::new(res)
+    }
+
+    /*
+       Galois conjugate of an element a in Q[x] / (x ** n + 1).
+       Here, the Galois conjugate of a(x) is simply a(-x).
+
+       Params:
+            - a reference to self: a Polynomial<T>
+
+        Returns:
+            - a Polynomial<T> representing the negated polynomial
+    */
+    pub fn galois_conjugate(&self) -> Self {
+        let conjugate_coeffs: Vec<T> = self
+            .coefficients
+            .iter()
+            .enumerate()
+            .map(|(i, coeff)| {
+                if i % 2 == 0 {
+                    coeff.clone()
+                } else {
+                    -(coeff.clone())
+                }
+            })
+            .collect();
+
+        Polynomial::new(conjugate_coeffs)
     }
 
     /*
@@ -123,22 +138,24 @@ impl Polynomial<FiniteFieldElem> {
        The lift of a(x) is simply a(x ** 2) seen as an element of Q[x] / (x ** n + 1).
 
        Params:
-          - a reference to self: a Polynomial<FiniteFieldElem>
+          - a reference to self: a Polynomial<T>
 
        Returns:
-          - a Polynomial<FiniteFieldElem> with double the degree
+          - a Polynomial<T> with double the degree
     */
-    fn lift(&self) -> Self {
-        let mut res = vec![FiniteFieldElem::default(); self.coefficients.len() * 2];
+    pub fn lift(&self) -> Self {
+        let mut res = vec![T::default(); self.coefficients.len() * 2];
 
         self.coefficients
             .iter()
             .enumerate()
-            .for_each(|(index, coeff)| res[2 * index] = *coeff);
+            .for_each(|(index, coeff)| res[2 * index] = coeff.clone());
 
         Polynomial::new(res)
     }
+}
 
+impl Polynomial<FiniteFieldElem> {
     /*
         Splits a polynomial into two polynomials, one containing the even indices, and the other containing the odd.
 
