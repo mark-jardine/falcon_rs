@@ -25,7 +25,9 @@ const MAX_SIGMA: f64 = 1.8205;
 const INV_2SIGMA2: f64 = 1.0 / (2.0 * MAX_SIGMA * MAX_SIGMA);
 
 // ln(2) and 1 / ln(2), with ln the natural logarithm
+#[allow(clippy::approx_constant)]
 const LN2: f64 = 0.69314718056;
+#[allow(clippy::approx_constant)]
 const ILN2: f64 = 1.44269504089;
 
 /*
@@ -129,7 +131,7 @@ fn approxexp(x: f64, ccs: f64) -> u64 {
     // Apply the scaling factor ccs
     let z_scaled: u128 = (f64::floor(ccs * (two_pow_63 as f64))) as u128;
 
-    (z_scaled * y as u128 >> 63) as u64
+    ((z_scaled * y as u128) >> 63) as u64
 }
 
 /*
@@ -195,7 +197,7 @@ pub fn samplerz<R: RngCore>(mu: f64, sigmin: f64, sigma: f64, rng: &mut R) -> i6
 
         let byte: u8 = rng.gen();
         let byte_sig = (byte & 1) as i16;
-        let z = byte_sig + ((byte_sig << 1) - 1) * z0 as i16;
+        let z = byte_sig + ((byte_sig << 1) - 1) * z0;
         let z_minus_r: f64 = z as f64 - r;
 
         let mut x: f64 = (z_minus_r * z_minus_r) * dss;

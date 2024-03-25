@@ -54,6 +54,7 @@ const PHI4_ROOTS: [Complex64; 1] = [Complex::new(1.00000000000000, -1.0000000000
     The second half of the roots are is the conjugates of the first half.
     The root at index (2 * i + 1) is the negation of the root at index (2 * i).
 */
+#[allow(clippy::approx_constant)]
 const PHI8_ROOTS: [Complex64; 4] = [
     Complex::new(0.707106781186548, 0.707106781186547),
     Complex::new(-0.707106781186548, -0.707106781186547),

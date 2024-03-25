@@ -70,7 +70,7 @@ fn split_ntt(
         f0_ntt.coefficients[i].value = (I2 as u32
             * (f_ntt.coefficients[2 * i].value + f_ntt.coefficients[2 * i + 1].value))
             % Q as u32;
-        let root = w.get(2 * i as usize).unwrap().to_owned() as usize;
+        let root = w.get(2 * i).unwrap().to_owned() as usize;
 
         f1_ntt.coefficients[i].value = ((I2 as i64
             * (f_ntt.coefficients[2 * i].value as i64
@@ -96,7 +96,7 @@ fn merge_ntt(
     f_tup: (Polynomial<FiniteFieldElem>, Polynomial<FiniteFieldElem>),
 ) -> Result<Polynomial<FiniteFieldElem>, NttError> {
     let (f0_ntt, f1_ntt) = f_tup;
-    let length: usize = f0_ntt.coefficients.len() * 2 as usize;
+    let length: usize = f0_ntt.coefficients.len() * 2_usize;
 
     if length == 0 {
         return Err(NttError::ZeroLengthPolynomial);
@@ -140,7 +140,7 @@ fn ntt(f: &Polynomial<FiniteFieldElem>) -> Result<Polynomial<FiniteFieldElem>, N
     let mut f_ntt: Polynomial<FiniteFieldElem> = Polynomial::new(vec![]);
 
     if len > 2 {
-        let (f0, f1) = Polynomial::<FiniteFieldElem>::split(&f);
+        let (f0, f1) = Polynomial::<FiniteFieldElem>::split(f);
         let f0_ntt: Polynomial<FiniteFieldElem> = ntt(&f0)?;
         let f1_ntt: Polynomial<FiniteFieldElem> = ntt(&f1)?;
 
@@ -149,7 +149,7 @@ fn ntt(f: &Polynomial<FiniteFieldElem>) -> Result<Polynomial<FiniteFieldElem>, N
                 f_ntt = f;
             }
             Err(_) => {
-                eprint!("Polynomial error in ntt().\n");
+                eprintln!("Polynomial error in ntt().");
                 return Err(NttError::ZeroLengthPolynomial);
             }
         }
@@ -173,7 +173,7 @@ fn inv_ntt(f_ntt: &Polynomial<FiniteFieldElem>) -> Result<Polynomial<FiniteField
     let mut f: Polynomial<FiniteFieldElem> = Polynomial::new(vec![]);
 
     if len > 2 {
-        let (f0_ntt, f1_ntt) = match split_ntt(&f_ntt) {
+        let (f0_ntt, f1_ntt) = match split_ntt(f_ntt) {
             Ok((f0_ntt, f1_ntt)) => (f0_ntt, f1_ntt),
             Err(e) => {
                 eprintln!(

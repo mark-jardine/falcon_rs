@@ -20,15 +20,28 @@
 use super::fft_consts::ROOTS_DICT;
 use super::polynomial::Polynomial;
 use num_complex::{Complex, Complex64};
-use std::vec;
+use std::{fmt, vec};
 
 #[derive(Debug)]
 pub enum FftError {
     ZeroLengthPolynomial,
     InvalidRootIndex,
     FailedToSplitPolynomial,
-    FailedToMergePolynomial, // InvNttFailed,
+    FailedToMergePolynomial,
 }
+
+impl fmt::Display for FftError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FftError::ZeroLengthPolynomial => write!(f, "Polynomial length is zero."),
+            FftError::InvalidRootIndex => write!(f, "Invalid root index provided."),
+            FftError::FailedToSplitPolynomial => write!(f, "Failed to split polynomial."),
+            FftError::FailedToMergePolynomial => write!(f, "Failed to merge polynomial."),
+        }
+    }
+}
+
+impl std::error::Error for FftError {}
 
 /*
     Split a polynomial f into two polynomials
@@ -122,7 +135,7 @@ pub fn fft(f: Polynomial<Complex64>) -> Result<Polynomial<Complex64>, FftError> 
     Ok(f_fft)
 }
 
-fn inv_fft(f_fft: Polynomial<Complex64>) -> Result<Polynomial<f64>, FftError> {
+pub fn inv_fft(f_fft: Polynomial<Complex64>) -> Result<Polynomial<f64>, FftError> {
     let length: usize = f_fft.coefficients.len();
 
     let mut f: Polynomial<f64> = Polynomial::new(vec![]);

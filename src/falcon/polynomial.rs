@@ -23,12 +23,16 @@
     For FFT format, `Complex64` is used.
 */
 
-use super::finite_field_element::FiniteFieldElem;
-use crate::falcon::fft;
+use super::{
+    fft::{fft, inv_fft},
+    finite_field_element::FiniteFieldElem,
+    ntrugen::{self, bitsize},
+};
+use num_bigint::BigInt;
 use num_complex::Complex64;
 use std::{
+    error::Error,
     ops::{Add, Div, Mul, Sub},
-    process::Output,
 };
 
 #[derive(Debug, Clone)]
@@ -38,7 +42,7 @@ pub struct Polynomial<T> {
 
 impl<T> Polynomial<T>
 where
-    T: Clone + Copy + Default + Mul + Add + Sub,
+    T: Clone,
 {
     pub fn new(_coefficients: Vec<T>) -> Self {
         Polynomial {
@@ -68,7 +72,7 @@ impl Polynomial<FiniteFieldElem> {
         Returns:
             - a Polynomial<FiniteFieldElem> representing the negated polynomial
     */
-    fn galois_conjugate(&self) -> Self {
+    pub fn galois_conjugate(&self) -> Self {
         let conjugate_coeffs: Vec<FiniteFieldElem> = self
             .coefficients
             .iter()
@@ -89,7 +93,7 @@ impl Polynomial<FiniteFieldElem> {
        Returns:
            - a Polynomial<FiniteFieldElem>
     */
-    fn field_norm(&self) -> Self {
+    pub fn field_norm(&self) -> Self {
         let n = self.coefficients.len() / 2;
         let mut even_coeffs: Vec<FiniteFieldElem> = vec![FiniteFieldElem::default(); n];
         let mut odd_coeffs: Vec<FiniteFieldElem> = vec![FiniteFieldElem::default(); n];
@@ -153,8 +157,8 @@ impl Polynomial<FiniteFieldElem> {
         let mut f1_coeffs: Vec<FiniteFieldElem> = Vec::new();
 
         for i in 0..(length / 2) {
-            f0_coeffs.push(p.coefficients[2 * i].clone());
-            f1_coeffs.push(p.coefficients[2 * i + 1].clone());
+            f0_coeffs.push(p.coefficients[2 * i]);
+            f1_coeffs.push(p.coefficients[2 * i + 1]);
         }
 
         let f0: Polynomial<FiniteFieldElem> = Polynomial::new(f0_coeffs);
@@ -169,7 +173,7 @@ impl Polynomial<FiniteFieldElem> {
        split(). merge() is also called recursively in this manner.
     */
     pub fn merge(f_vec: Vec<Polynomial<FiniteFieldElem>>) -> Polynomial<FiniteFieldElem> {
-        let f0 = f_vec.get(0).unwrap();
+        let f0 = f_vec.first().unwrap();
         let f1 = f_vec.get(1).unwrap();
         let length: usize = f0.coefficients.len() * 2;
         let mut f: Polynomial<FiniteFieldElem> =
@@ -294,9 +298,9 @@ impl Polynomial<f64> {
     Returns:
         - a vector of coefficients
 */
-fn karatsuba<T>(a: &[T], b: &[T]) -> Vec<T>
+pub fn karatsuba<T>(a: &[T], b: &[T]) -> Vec<T>
 where
-    T: Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Default + Clone + Copy,
+    T: Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Default + Clone,
 {
     let n = a.len();
     if n <= 1 {
@@ -333,9 +337,9 @@ where
     // Combine the results: a0b0 + middle + a1b1
     let mut result = vec![T::default(); n * 2];
     for i in 0..n {
-        result[i] = result[i] + a0b0.get(i).unwrap_or(&T::default()).clone();
-        result[i + mid] = result[i + mid] + middle.get(i).unwrap_or(&T::default()).clone();
-        result[i + n] = result[i + n] + a1b1.get(i).unwrap_or(&T::default()).clone();
+        result[i] = result[i].clone() + a0b0.get(i).unwrap_or(&T::default()).clone();
+        result[i + mid] = result[i + mid].clone() + middle.get(i).unwrap_or(&T::default()).clone();
+        result[i + n] = result[i + n].clone() + a1b1.get(i).unwrap_or(&T::default()).clone();
     }
 
     result
@@ -352,21 +356,156 @@ where
         - a vector of coefficients
         -
 */
-fn karamul<T>(a: &[T], b: &[T]) -> Vec<T>
+pub fn karamul<T>(a: &[T], b: &[T]) -> Vec<T>
 where
-    T: Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Default + Clone + Copy,
+    T: Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Default + Clone,
 {
     let ab = karatsuba(a, b);
-    let mut abr: Vec<T> = vec![];
+    let mut abr: Vec<T> = vec![T::default(); ab.len() / 2];
     let length = a.len();
 
     for i in 0..length {
-        abr[i] = ab[i] - ab[i + length];
+        abr[i] = ab[i].clone() - ab[i + length].clone();
     }
 
     abr
 }
 
+impl Polynomial<BigInt> {
+    /*
+       Reduce (F, G) relatively to (f, g).
+
+       This is done via Babai's reduction.
+       (F, G) <-- (F, G) - k * (f, g), where k = round((F f* + G g*) / (f f* + g g*)).
+       Corresponds to algorithm 7 (Reduce) of Falcon's documentation.
+
+       This function modifies F, G in place
+
+       Params:
+            - f, g Polynomial<BigInt>
+            - F, G &mut Polynomial<BigInt>
+
+        Returns:
+            - Either void(meaning F, G have been modified in place), or an Error
+
+    */
+    pub fn reduce(
+        f: Polynomial<BigInt>,
+        g: Polynomial<BigInt>,
+        capf: &mut Polynomial<BigInt>,
+        capg: &mut Polynomial<BigInt>,
+    ) -> Result<(), Box<dyn Error>> {
+        let len = f.coefficients.len();
+        let f_min = f.coefficients.iter().min().unwrap();
+        let f_max = f.coefficients.iter().max().unwrap();
+        let g_min = g.coefficients.iter().min().unwrap();
+        let g_max = g.coefficients.iter().max().unwrap();
+
+        let size = vec![
+            53u64,
+            ntrugen::bitsize(f_min.to_owned()),
+            ntrugen::bitsize(f_max.to_owned()),
+            ntrugen::bitsize(g_min.to_owned()),
+            ntrugen::bitsize(g_max.to_owned()),
+        ]
+        .into_iter()
+        .max()
+        .ok_or("Could not find size in reduce() in polynomial.rs")?;
+
+        let f_adjust_coeffs: Vec<Complex64> = f
+            .coefficients
+            .iter()
+            .map(|elt| elt >> (size - 53))
+            .map(|elt| Complex64::new(i64::try_from(elt).unwrap() as f64, 0.0))
+            .collect();
+
+        let g_adjust_coeffs: Vec<Complex64> = g
+            .coefficients
+            .iter()
+            .map(|elt| elt >> (size - 53))
+            .map(|elt| Complex64::new(i64::try_from(elt).unwrap() as f64, 0.0))
+            .collect();
+
+        let f_adjust = Polynomial::new(f_adjust_coeffs);
+        let g_adjust = Polynomial::new(g_adjust_coeffs);
+        let mut f_adj_fft = fft(f_adjust)?;
+        let mut g_adj_fft = fft(g_adjust)?;
+
+        loop {
+            let capf_min = capf.coefficients.iter().min().unwrap();
+            let capf_max = capf.coefficients.iter().max().unwrap();
+            let capg_min = capg.coefficients.iter().min().unwrap();
+            let capg_max = capf.coefficients.iter().max().unwrap();
+
+            let cap_size = vec![
+                53u64,
+                bitsize(capf_min.to_owned()),
+                bitsize(capf_max.to_owned()),
+                bitsize(capg_min.to_owned()),
+                bitsize(capg_max.to_owned()),
+            ]
+            .into_iter()
+            .max()
+            .ok_or("Could not find Size in reduce() in polynomial.rs")?;
+
+            if cap_size < size {
+                break;
+            }
+
+            let capf_adjust_coeffs: Vec<Complex64> = capf
+                .coefficients
+                .iter()
+                .map(|elt| elt >> (size - 53))
+                .map(|elt| Complex64::new(i64::try_from(elt).unwrap() as f64, 0.0))
+                .collect();
+
+            let capg_adjust_coeffs: Vec<Complex64> = capg
+                .coefficients
+                .iter()
+                .map(|elt| elt >> (size - 53))
+                .map(|elt| Complex64::new(i64::try_from(elt).unwrap() as f64, 0.0))
+                .collect();
+
+            let capf_adjust = Polynomial::new(capf_adjust_coeffs);
+            let capg_adjust = Polynomial::new(capg_adjust_coeffs);
+            let capf_adj_fft = fft(capf_adjust)?;
+            let capg_adj_fft = fft(capg_adjust)?;
+
+            let den_fft = (f_adj_fft.clone() * f_adj_fft.adjoint())
+                + (g_adj_fft.clone() * g_adj_fft.adjoint());
+            let num_fft =
+                (capf_adj_fft * f_adj_fft.adjoint()) + (capg_adj_fft * g_adj_fft.adjoint());
+            let k_fft = num_fft / den_fft;
+            let k_fp = inv_fft(k_fft)?;
+            let k: Polynomial<i64> = k_fp.coefficients.iter().map(|f| f.round() as i64).collect();
+
+            let k_all_zeroes: bool = k
+                .coefficients
+                .iter()
+                .filter(|e| **e == 0)
+                .collect::<Vec<&i64>>()
+                .is_empty();
+            if k_all_zeroes {
+                break;
+            }
+            let k_bigint_coeffs: Vec<BigInt> = k
+                .coefficients
+                .iter()
+                .map(|&num| BigInt::from(num))
+                .collect();
+
+            // TODO: Following can be replaced with Toom-Cook when optmising
+            let fk = karamul(&f.coefficients, &k_bigint_coeffs);
+            let gk = karamul(&g.coefficients, &k_bigint_coeffs);
+
+            for i in 0..len {
+                capf.coefficients[i] -= &fk[i] << (cap_size - size);
+                capg.coefficients[i] -= &gk[i] << (cap_size - size);
+            }
+        }
+        Ok(())
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
