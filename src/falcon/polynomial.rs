@@ -24,15 +24,15 @@
 */
 
 use super::{
-    fft::{fft, inv_fft},
+    fft::{fft, inv_fft, FftError},
     finite_field_element::FiniteFieldElem,
     ntrugen::{self, bitsize},
 };
 use num_bigint::BigInt;
-use num_complex::Complex64;
+use num_complex::{Complex, Complex64};
 use std::{
     error::Error,
-    ops::{Add, Div, Mul, Neg, Sub, SubAssign},
+    ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign},
 };
 
 #[derive(Debug, Clone)]
@@ -53,11 +53,30 @@ where
 
 impl<T> FromIterator<T> for Polynomial<T>
 where
-    T: Clone + Copy + Default + Mul + Add + Sub,
+    T: Clone + Default + Mul + Add + Sub,
 {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         let coefficients = iter.into_iter().collect::<Vec<_>>();
         Polynomial::<T>::new(coefficients)
+    }
+}
+
+impl<T> Mul for Polynomial<T>
+where
+    T: Clone + Default + Mul<Output = T> + Add<Output = T> + Sub<Output = T>,
+{
+    type Output = Polynomial<T>;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        let mut result = vec![T::default(); self.coefficients.len() + rhs.coefficients.len() - 1];
+
+        for (i, self_coeff) in self.coefficients.iter().enumerate() {
+            for (j, rhs_coeff) in rhs.coefficients.iter().enumerate() {
+                result[i + j] = result[i + j].clone() + self_coeff.clone() * rhs_coeff.clone();
+            }
+        }
+
+        Polynomial::new(result)
     }
 }
 
@@ -69,7 +88,8 @@ where
         + Sub<Output = T>
         + Mul<Output = T>
         + SubAssign
-        + Neg<Output = T>,
+        + Neg<Output = T>
+        + AddAssign,
 {
     /*
        Project an element a of Q[x] / (x ** n + 1) onto Q[x] / (x ** (n // 2) + 1).
@@ -82,28 +102,43 @@ where
            - a Polynomial<T>
     */
     pub fn field_norm(&self) -> Self {
-        let n = self.coefficients.len() / 2;
-        let mut even_coeffs: Vec<T> = vec![T::default(); n];
-        let mut odd_coeffs: Vec<T> = vec![T::default(); n];
+        let n2 = self.coefficients.len() / 2;
 
-        for (i, coeff) in self.coefficients.iter().enumerate() {
-            if i % 2 == 0 {
-                even_coeffs.push(coeff.clone());
-            } else {
-                odd_coeffs.push(coeff.clone());
-            }
-        }
-        let even_coeffs_sq = karamul(&even_coeffs, &even_coeffs);
-        let odd_coeffs_sq = karamul(&odd_coeffs, &odd_coeffs);
-
-        let mut res = even_coeffs_sq.clone();
-        res.iter_mut()
+        // Separate even and odd coefficients
+        let ae: Vec<T> = self.coefficients.iter().step_by(2).cloned().collect();
+        let ao: Vec<T> = self
+            .coefficients
+            .iter()
             .skip(1)
-            .enumerate()
-            .for_each(|(index, curr)| *curr -= even_coeffs_sq[index - 1].clone());
-        res[0] = odd_coeffs_sq[n - 1].clone();
+            .step_by(2)
+            .cloned()
+            .collect();
+
+        // Square both sets of coefficients
+        let ae_squared = karamul(&ae, &ae);
+        let ao_squared = karamul(&ao, &ao);
+
+        // Prepare the result vector with the squared even coefficients
+        let mut res = ae_squared;
+
+        // Perform the subtraction and addition as per the Python version
+        for i in 0..(n2 - 1) {
+            res[i + 1] = res[i + 1].clone() - ao_squared[i].clone();
+        }
+        res[0] = res[0].clone() + ao_squared[n2 - 1].clone();
 
         Polynomial::new(res)
+    }
+
+    /*
+       Compute the square euclidean norm
+    */
+    pub fn sqnorm(&self) -> T {
+        let mut res = T::default();
+        for coef in &self.coefficients {
+            res += coef.clone() * coef.clone();
+        }
+        res
     }
 
     /*
@@ -226,8 +261,18 @@ impl Polynomial<Complex64> {
         (f0, f1)
     }
 
-    pub fn adjoint(&mut self) -> Self {
+    pub fn map_to_fp(&self) -> Polynomial<f64> {
+        Polynomial::new(self.coefficients.iter().map(|c| c.re).collect())
+    }
+
+    pub fn adjoint_fft(&self) -> Self {
         Polynomial::new(self.coefficients.iter().map(|c| c.conj()).collect())
+    }
+
+    pub fn adjoint(&self) -> Result<Polynomial<f64>, FftError> {
+        let self_fft = fft(self.to_owned())?;
+        let adj = self_fft.adjoint_fft();
+        inv_fft(adj)
     }
 }
 
@@ -253,20 +298,6 @@ impl Sub for Polynomial<Complex64> {
                 .iter()
                 .zip(rhs.coefficients)
                 .map(|(s, rhs)| s - rhs)
-                .collect(),
-        )
-    }
-}
-
-impl Mul for Polynomial<Complex64> {
-    type Output = Self;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        Polynomial::new(
-            self.coefficients
-                .iter()
-                .zip(rhs.coefficients)
-                .map(|(s, rhs)| s * rhs)
                 .collect(),
         )
     }
@@ -303,6 +334,42 @@ impl Polynomial<f64> {
 
         f_merged
     }
+
+    pub fn map_to_complex(&self) -> Polynomial<Complex64> {
+        Polynomial::new(
+            self.coefficients
+                .iter()
+                .map(|c| Complex64::new(*c, 0.0))
+                .collect(),
+        )
+    }
+}
+
+impl Add for Polynomial<f64> {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Polynomial::new(
+            self.coefficients
+                .iter()
+                .zip(rhs.coefficients)
+                .map(|(s, rhs)| s + rhs)
+                .collect(),
+        )
+    }
+}
+impl Div for Polynomial<f64> {
+    type Output = Self;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        Polynomial::new(
+            self.coefficients
+                .iter()
+                .zip(rhs.coefficients)
+                .map(|(s, rhs)| s / rhs)
+                .collect(),
+        )
+    }
 }
 
 /*
@@ -317,11 +384,12 @@ impl Polynomial<f64> {
 */
 pub fn karatsuba<T>(a: &[T], b: &[T]) -> Vec<T>
 where
-    T: Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Default + Clone,
+    T: Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Default + Clone + AddAssign,
 {
     let n = a.len();
-    if n <= 1 {
-        return vec![a[0].clone() * b[0].clone()];
+    if n == 1 {
+        // Pad with a default to ensure length of 2
+        return vec![a[0].clone() * b[0].clone(), T::default()];
     }
 
     let mid = n / 2;
@@ -344,19 +412,19 @@ where
         .map(|(x, y)| x + y)
         .collect();
 
-    let middle = karatsuba(&a0_plus_a1, &b0_plus_b1)
-        .into_iter()
-        .zip(a0b0.iter().cloned())
-        .zip(a1b1.iter().cloned())
-        .map(|((x, y), z)| x - y - z)
-        .collect::<Vec<T>>();
+    let mut axbx = karatsuba(&a0_plus_a1, &b0_plus_b1);
 
-    // Combine the results: a0b0 + middle + a1b1
-    let mut result = vec![T::default(); n * 2];
     for i in 0..n {
-        result[i] = result[i].clone() + a0b0.get(i).unwrap_or(&T::default()).clone();
-        result[i + mid] = result[i + mid].clone() + middle.get(i).unwrap_or(&T::default()).clone();
-        result[i + n] = result[i + n].clone() + a1b1.get(i).unwrap_or(&T::default()).clone();
+        axbx[i] = axbx[i].clone() - a0b0[i].clone() - a1b1[i].clone();
+    }
+
+    let mut result = vec![T::default(); 2 * n];
+    for i in 0..n {
+        result[i] += a0b0[i].clone();
+        result[i + n] += a1b1[i].clone();
+        if i + mid < n {
+            result[i + mid] += axbx[i].clone();
+        }
     }
 
     result
@@ -375,7 +443,7 @@ where
 */
 pub fn karamul<T>(a: &[T], b: &[T]) -> Vec<T>
 where
-    T: Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Default + Clone,
+    T: Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Default + Clone + AddAssign,
 {
     let ab = karatsuba(a, b);
     let mut abr: Vec<T> = vec![T::default(); ab.len() / 2];
@@ -436,17 +504,18 @@ impl Polynomial<BigInt> {
             .map(|elt| Complex64::new(i64::try_from(elt).unwrap() as f64, 0.0))
             .collect();
 
+        // dbg!(g.clone());x
         let g_adjust_coeffs: Vec<Complex64> = g
             .coefficients
             .iter()
             .map(|elt| elt >> (size - 53))
             .map(|elt| Complex64::new(i64::try_from(elt).unwrap() as f64, 0.0))
             .collect();
-
+        // dbg!(g_adjust_coeffs.clone());
         let f_adjust = Polynomial::new(f_adjust_coeffs);
         let g_adjust = Polynomial::new(g_adjust_coeffs);
-        let mut f_adj_fft = fft(f_adjust)?;
-        let mut g_adj_fft = fft(g_adjust)?;
+        let f_adj_fft = fft(f_adjust)?;
+        let g_adj_fft = fft(g_adjust)?;
 
         loop {
             let capf_min = capf.coefficients.iter().min().unwrap();
@@ -456,10 +525,10 @@ impl Polynomial<BigInt> {
 
             let cap_size = vec![
                 53u64,
-                bitsize(capf_min.to_owned()),
-                bitsize(capf_max.to_owned()),
-                bitsize(capg_min.to_owned()),
-                bitsize(capg_max.to_owned()),
+                ntrugen::bitsize(capf_min.to_owned()),
+                ntrugen::bitsize(capf_max.to_owned()),
+                ntrugen::bitsize(capg_min.to_owned()),
+                ntrugen::bitsize(capg_max.to_owned()),
             ]
             .into_iter()
             .max()
@@ -468,18 +537,23 @@ impl Polynomial<BigInt> {
             if cap_size < size {
                 break;
             }
-
             let capf_adjust_coeffs: Vec<Complex64> = capf
                 .coefficients
                 .iter()
-                .map(|elt| elt >> (size - 53))
-                .map(|elt| Complex64::new(i64::try_from(elt).unwrap() as f64, 0.0))
+                // .map(|elt| {
+                //     println! {"before shft: {}", elt}
+                //     println! {"after shft: {}", elt >> (size - 53)}
+                //     elt >> (size - 53)
+                // })
+                .map(|elt| {
+                    Complex64::new(i64::try_from(elt >> (cap_size - 53)).unwrap() as f64, 0.0)
+                })
                 .collect();
 
             let capg_adjust_coeffs: Vec<Complex64> = capg
                 .coefficients
                 .iter()
-                .map(|elt| elt >> (size - 53))
+                .map(|elt| elt >> (cap_size - 53))
                 .map(|elt| Complex64::new(i64::try_from(elt).unwrap() as f64, 0.0))
                 .collect();
 
@@ -488,10 +562,16 @@ impl Polynomial<BigInt> {
             let capf_adj_fft = fft(capf_adjust)?;
             let capg_adj_fft = fft(capg_adjust)?;
 
-            let den_fft = (f_adj_fft.clone() * f_adj_fft.adjoint())
-                + (g_adj_fft.clone() * g_adj_fft.adjoint());
-            let num_fft =
-                (capf_adj_fft * f_adj_fft.adjoint()) + (capg_adj_fft * g_adj_fft.adjoint());
+            let f_adj_fft_adjoint = f_adj_fft.adjoint()?;
+            let g_adj_fft_adjoint = g_adj_fft.adjoint()?;
+            let f_adj_fft_adjoint_complex = f_adj_fft_adjoint.map_to_complex();
+            let g_adj_fft_adjoint_complex = g_adj_fft_adjoint.map_to_complex();
+
+            let den_fft = (f_adj_fft.clone() * f_adj_fft_adjoint_complex.clone())
+                + (g_adj_fft.clone() * g_adj_fft_adjoint_complex.clone());
+
+            let num_fft = (capf_adj_fft * f_adj_fft_adjoint_complex)
+                + (capg_adj_fft * g_adj_fft_adjoint_complex);
             let k_fft = num_fft / den_fft;
             let k_fp = inv_fft(k_fft)?;
             let k: Polynomial<i64> = k_fp.coefficients.iter().map(|f| f.round() as i64).collect();

@@ -131,7 +131,6 @@ pub fn fft(f: Polynomial<Complex64>) -> Result<Polynomial<Complex64>, FftError> 
         f_fft.coefficients[1] = f.coefficients[0] - Complex64::new(0.0, 1.0) * f.coefficients[1];
     }
 
-    println!("\nf_fft:{f_fft:?}");
     Ok(f_fft)
 }
 
